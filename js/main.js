@@ -32,6 +32,7 @@ function start()
 	window.addEventListener('resize', onWindowResize, false);
 	window.addEventListener('keydown', onKeyDown, false);
 	window.addEventListener('keyup', onKeyUp, false);
+	window.addEventListener('click', onMouseClick, false);
 	animate();
 }
 
@@ -56,4 +57,9 @@ function onKeyDown(e)
 function onKeyUp(e)
 {
 	game.onKeyUp(e.keyCode);
+}
+
+function onMouseClick(e)
+{
+	game.onMouseClick(e);
 }

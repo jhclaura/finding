@@ -1,4 +1,5 @@
 import ModelLoader from "./modelLoader.js"
+import Cha from "./cha.js"
 
 export default class Game {
 	constructor() {
@@ -13,134 +14,137 @@ export default class Game {
 
 		this.scene = new THREE.Scene();
 		this.scene.background = new THREE.Color( 0xbfe3dd );
-		this.scene.add( new THREE.AmbientLight( 0x404040 ) );
 
-		this.camera = new THREE.PerspectiveCamera( 50, window.innerWidth/window.innerHeight, 0.1, 1000 );
+		this.ambientLight = new THREE.AmbientLight( 0xd8d8d8 );
+		this.directionalLight = new THREE.DirectionalLight( 0xffffff,1 );
+		this.scene.add( this.ambientLight );
+		this.scene.add( this.directionalLight );
+
+		//this.camera = new THREE.PerspectiveCamera( 50, window.innerWidth/window.innerHeight, 0.1, 1000 );
+		let aspect = window.innerWidth/window.innerHeight;
+		this.cameraFrustumSize = 70;
+		this.camera = new THREE.OrthographicCamera( this.cameraFrustumSize*aspect/-2, this.cameraFrustumSize*aspect/2, this.cameraFrustumSize/2, this.cameraFrustumSize/-2, 0.1, 1000 );
+		
 		this.renderer = new THREE.WebGLRenderer( {antialias: true} );
 		this.renderer.setPixelRatio( window.devicePixelRatio );
 		this.renderer.setSize( window.innerWidth, window.innerHeight );
 		this.container = document.createElement( 'div' );
 		document.body.appendChild( this.container );
 		this.container.appendChild( this.renderer.domElement );
-		// this.geometry = new THREE.BoxGeometry( 1, 1, 1 );
-		// this.material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
-		// this.cube = new THREE.Mesh( this.geometry, this.material );
-		// this.scene.add( this.cube );
 
-		this.cameraControl = new THREE.OrbitControls(this.camera);
-		this.cameraControl.target.set( 0, 0, 0 );
-		this.cameraControl.enablePan = false;
-		this.camera.position.z = 5;
-		this.cameraControl.update();
+		// this.cameraControl = new THREE.OrbitControls(this.camera);
+		// this.cameraControl.target.set( 0, 0, 0 );
+		// this.cameraControl.enablePan = false;
+		// this.cameraControl.update();
+		this.camera.position.set( 0, 13, 30 );
+		this.camera.lookAt( 0,0,0 );
+
+		// this.cameraOrthoHelper = new THREE.CameraHelper( this.camera );
+		// this.scene.add( this.cameraOrthoHelper );
+		// this.cameraOrthoHelper.visible = true;
+
+		this.raycaster = new THREE.Raycaster();
+		this.mouse = new THREE.Vector2();
+
+		var geometry = new THREE.CylinderBufferGeometry( 0, 10, 30, 4, 1 );
+		var material = new THREE.MeshPhongMaterial( { color: 0xffffff } );
+		for ( var i = 0; i < 500; i ++ ) {
+			var mesh = new THREE.Mesh( geometry, material );
+			mesh.position.x = Math.random() * 1600 - 800;
+			mesh.position.y = 0;
+			mesh.position.z = Math.random() * 1600 - 800;
+			mesh.updateMatrix();
+			mesh.matrixAutoUpdate = false;
+			this.scene.add( mesh );
+		}
+
+		geometry = new THREE.PlaneGeometry(100,100,1,1);
+		material = new THREE.MeshLambertMaterial({color: 0xaaaaaa});
+		this.ground = new THREE.Mesh(geometry, material);
+		this.ground.rotation.x = -90 * Math.PI/180;
+		this.scene.add(this.ground);
+
+		this.Cha = new Cha(this.scene);
+		this.scene.add(this.Cha);
+		this.camera.target = this.Cha;
 
 		this.modelLoader = new ModelLoader();
-		this.modelLoader.load("./assets/models/cha_game_exporter.glb", (gltf)=>{this.onLoadFinderIdle(gltf);});
+		this.modelLoader.load("./assets/models/cha_gameExport.glb", (gltf)=>{this.Cha.onLoadModel(gltf);});
 		
+		// DAT.GUI
 		this.panel = panel;
+		this.setupCameraPanel();
+		//this.Cha.setupPanel(this.panel);
 	}
 
-	onLoadFinderIdle(gltf)
+	setupCameraPanel()
 	{
-		this.finderIdel = gltf;
-		console.log(this.finderIdel.animations);
-		console.log(this.finderIdel.scene);
-		//this.finderIdel.scene
-		this.scene.add(this.finderIdel.scene);
-
-		this.mixerFinder = new THREE.AnimationMixer(this.finderIdel.scene);
-		this.mixerFinder.clipAction(this.finderIdel.animations[0]).play();
-
-		// this.actionFinder = {};
-		// this.actionFinder["idle"] = this.mixerFinder.clipAction(this.finderIdel.animations[0]);
-		// this.modelLoader.load("./assets/models/finder_arm.glb", (gltf)=>{this.onLoadFinderArm(gltf);});
-
-		// this.finderIdel.animations.forEach( ( clip ) => {
-		// 	this.mixerFinder.clipAction( clip ).play();
-		// } );
-	}
-
-	onLoadFinderArm(gltf)
-	{
-		this.actionFinder["arm"] = this.mixerFinder.clipAction(gltf.animations[0]);
-		this.finderIdel.animations.push(gltf.animations[0]);
-		//this.mixerFinder.clipAction(this.finderIdel.animations[0]).play();
-
-		this.setupPanel();
-	}
-
-	setupPanel()
-	{
-		let folder0 = this.panel.addFolder("Acitvate / Deactivate");
-		let folder1 = this.panel.addFolder("Crossfading");
-		let folder2 = this.panel.addFolder("Blend Weights");
-
-		this.panelSettings = {
-			'Deactivate all': ()=>{ this.deactivateAllActions(); },
-			'Activate all': ()=>{ this.activateAllActions(); },
-			"From Idle to Arm": ()=>{
-				this.setWeight(this.actionFinder.arm, 1);
-				this.actionFinder.arm.time = 0;
-				this.actionFinder.idle.crossFadeTo(this.actionFinder.arm, 0.5, true);
-				//this.prepareCrossfade(this.actionFinder.idle, this.actionFinder.arm, 1.0);
-			},
-			"From Arm to Idle": ()=>{
-				this.setWeight(this.actionFinder.idle, 1);
-				this.actionFinder.idle.time = 0;
-				this.actionFinder.arm.crossFadeTo(this.actionFinder.idle, 0.5, true);
-				//this.prepareCrossfade(this.actionFinder.arm, this.actionFinder.idle, 1.0);
-			},
-			"Idle weight": 0.0,
-			"Arm weight": 1.0
+		let folder = this.panel.addFolder("Camera");
+		this.cameraPanelSettings = {
+			"position x": 0,
+			"position y": 13,
+			"position z": 30,
 		};
-
-		folder0.add( this.panelSettings, 'Deactivate all' );
-		folder0.add( this.panelSettings, 'Activate all' );
-		folder1.add( this.panelSettings, "From Idle to Arm");
-		folder1.add( this.panelSettings, "From Arm to Idle");
-		folder2.add( this.panelSettings, "Idle weight", 0.0, 1.0, 0.01).onChange((weight)=>{
-			this.setWeight(this.actionFinder.idle, weight);
+		folder.add(this.cameraPanelSettings, "position x", -50.0, 50.0, 0.1).onChange((position)=>{
+			this.setCameraPosition("x", position);
 		});
-		folder2.add( this.panelSettings, "Arm weight", 0.0, 1.0, 0.01).onChange((weight)=>{
-			this.setWeight(this.actionFinder.arm, weight);
+		folder.add(this.cameraPanelSettings, "position y", -50.0, 50.0, 0.1).onChange((position)=>{
+			this.setCameraPosition("y", position);
+		});
+		folder.add(this.cameraPanelSettings, "position z", -50.0, 50.0, 0.1).onChange((position)=>{
+			this.setCameraPosition("z", position);
 		});
 	}
 
-	activateAllActions()
+	setCameraPosition(axis, position)
 	{
-		this.setWeight( this.actionFinder.idle, this.panelSettings[ 'Idle weight' ] );
-		this.setWeight( this.actionFinder.arm, this.panelSettings[ 'Arm weight' ] );
-
-		for(let key in this.actionFinder)
+		switch(axis)
 		{
-			this.actionFinder[key].play();
+			case "x":
+			this.camera.position.x = position;
+			//this.camera.lookAt( 0,0,0 );
+			this.camera.updateProjectionMatrix();
+			break;
+			case "y":
+			this.camera.position.y = position;
+			//this.camera.lookAt( 0,0,0 );
+			this.camera.updateProjectionMatrix();
+			break;
+			case "z":
+			this.camera.position.z = position;
+			//this.camera.lookAt( 0,0,0 );
+			this.camera.updateProjectionMatrix();
+			break;
 		}
+		//this.cameraOrthoHelper.update();
 	}
 
-	deactivateAllActions()
+	cameraFollow(delta)
 	{
-		for(let key in this.actionFinder)
-		{
-			this.actionFinder[key].stop();
-		}
-	}
-
-	setWeight(action, weight)
-	{
-		action.enabled = true;
-		action.setEffectiveTimeScale( 1 );
-		action.setEffectiveWeight( weight );
+		let target = new THREE.Vector3();
+		target = this.camera.target.getRootWorldPosition(target);
+		if (target == null) return;
+		target.y += 13;
+		target.z += 30;
+		this.camera.position.lerp(target, delta*1);
 	}
 
 	animate(delta) {
-		if(this.mixerFinder)
-			this.mixerFinder.update(delta);
-		this.cameraControl.update(delta);
+		this.Cha.update(delta);
+		//this.cameraControl.update(delta);
+		this.cameraFollow(delta);
 		this.renderer.render( this.scene, this.camera );
 	}
 
 	onWindowResize()
 	{
-		this.camera.aspect = window.innerWidth / window.innerHeight;
+		//this.camera.aspect = window.innerWidth / window.innerHeight;
+		let aspect = window.innerWidth/window.innerHeight;
+		this.camera.left = - this.cameraFrustumSize * aspect / 2;
+		this.camera.right = this.cameraFrustumSize * aspect / 2;
+		this.camera.top = this.cameraFrustumSize / 2;
+		this.camera.bottom = - this.cameraFrustumSize / 2;
+
 		this.camera.updateProjectionMatrix();
 		this.renderer.setSize(window.innerWidth, window.innerHeight);
 	}
@@ -179,6 +183,29 @@ export default class Game {
 			case 40:
 			case 39:
 			break;
+		}
+	}
+
+	onMouseClick(event)
+	{
+		event.preventDefault();
+		this.mouse.x = (event.clientX / this.renderer.domElement.clientWidth) * 2 - 1;
+		this.mouse.y = - (event.clientY / this.renderer.domElement.clientHeight) * 2 + 1;
+
+		this.checkRaycast();
+	}
+
+	checkRaycast()
+	{
+		this.raycaster.setFromCamera(this.mouse, this.camera);
+		let intersections = this.raycaster.intersectObjects(this.scene.children);
+		if (intersections.length > 0)
+		{
+			if(intersections[0].object == this.ground)
+			{
+				console.log(intersections[0].point);
+				this.Cha.updateMoveTarget(intersections[0].point);
+			}
 		}
 	}
 }
