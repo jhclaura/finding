@@ -19,7 +19,7 @@ export default class Cha extends THREE.Object3D {
 				{name: 'stopWalking', from: 'follow', to: 'idle'}
 			],
 			methods: {
-				onWalk: ()=>{ 
+				onWalk: ()=>{
 					this.prepareCrossFade(this.actionDictionary.idle, this.actionDictionary.walk, 0.5);
 				},
 				onStopWalking: ()=>{
@@ -29,8 +29,23 @@ export default class Cha extends THREE.Object3D {
 		});
 		this.moveTarget = new THREE.Vector3();
 		this.rotateTarget = new THREE.Quaternion();
+		this.headLookTarget = new THREE.Quaternion();
 
 		this.util = new Util();
+
+		let geo = new THREE.SphereGeometry(15);
+		let mat = new THREE.MeshBasicMaterial({visible: false, color: 0x00ffff});
+		this.invisibleDome = new THREE.Mesh(geo, mat);
+		this.invisibleDome.position.y = 3;
+
+		geo = new THREE.CylinderGeometry( 0, 2, 4, 5 );
+		mat = new THREE.MeshLambertMaterial({ color: 0x777777 });
+		this.dummyHead = new THREE.Mesh(geo, mat);
+		this.dummyHead.visible = false;
+		this.dummyHead.scale.multiplyScalar(2);
+		this.dummyHead.position.y = 15;
+
+		this.identityQuaternion = new THREE.Quaternion();
 	}
 
 	onLoadModel(gltf)
@@ -39,10 +54,15 @@ export default class Cha extends THREE.Object3D {
 		this.model = this.gltf.scene.children[0];
 		this.model.children[0].scale.multiplyScalar(1000);
 		console.log(this.model);	// RootNode
-		console.log(this.model.children[0]);	// Cha
+		//console.log(this.model.children[0]);	// Cha
 		this.animations = this.gltf.animations;
 		console.log(this.animations);
 		this.add(this.model);
+
+		this.model.add(this.invisibleDome);
+		// ===== Debug look =====
+		this.headJoint = this.model.children[0].children[0].children[0].children[2].children[0].children[0].children[2];
+		this.model.children[0].children[0].children[0].children[2].children[0].children[0].attach(this.dummyHead);
 
 		// Bounding box
 		this.model.traverse (function (mesh)
@@ -122,7 +142,6 @@ export default class Cha extends THREE.Object3D {
 
 	prepareCrossFade(startAction, endAction, duration)
 	{
-		console.log(endAction);
 		this.setActionWeight(endAction, 1);
 		endAction.time = 0;
 		startAction.crossFadeTo(endAction, duration, true);//.setEffectiveWeight(0);
@@ -147,10 +166,14 @@ export default class Cha extends THREE.Object3D {
 		// 	this.model.children[0].position.z += (delta * 0.01);			
 		// }
 
+		// look at mouse
+
+
 		// --------TRANSFORMATION--------
 		switch(this.fsm.state)
 		{
 			case 'follow':
+			this.headJoint.quaternion.slerp( this.identityQuaternion, 0.1 );
 			this.model.quaternion.slerp(this.rotateTarget, delta*5);
 
 			//this.model.position.lerp(this.moveTarget, delta * 1);
@@ -169,11 +192,10 @@ export default class Cha extends THREE.Object3D {
 	{
 		//this.model.lookAt(moveTarget);
 		this.rotateTarget = this.util.quaternionLookAt(this.model, moveTarget);
-
 		//this.moveTarget = this.model.worldToLocal(moveTarget);
 		this.moveTarget = moveTarget;
 		
-		console.log(this.model.position.distanceTo(this.moveTarget));
+		//console.log(this.model.position.distanceTo(this.moveTarget));
 		if (this.model.position.distanceToSquared(this.moveTarget) > 1.5 * 1.5)
 		{
 			if(this.fsm.can('walk'))
@@ -182,5 +204,27 @@ export default class Cha extends THREE.Object3D {
 				this.fsm.walk();
 			}
 		}
+	}
+
+	updateHeadLookAt(raycaster)
+	{
+		let intersects = [];
+		this.invisibleDome.raycast(raycaster, intersects);
+		if (intersects.length>0)
+		{
+			this.headLookTarget.copy(this.dummyHead.quaternion);
+			this.headJoint.quaternion.copy(this.headLookTarget);
+			this.headJoint.lookAt(intersects[0].point);
+			this.headJoint.quaternion.multiply(this.headLookTarget.inverse());
+
+			return intersects[0].point;
+		}
+		else
+			return null;
+	}
+
+	lookReset()
+	{
+		this.headJoint.quaternion.slerp( this.identityQuaternion, 0.1 );
 	}
 }

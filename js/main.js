@@ -33,6 +33,7 @@ function start()
 	window.addEventListener('keydown', onKeyDown, false);
 	window.addEventListener('keyup', onKeyUp, false);
 	window.addEventListener('click', onMouseClick, false);
+	window.addEventListener('mousemove', onMouseMove, false);
 	animate();
 }
 
@@ -62,4 +63,9 @@ function onKeyUp(e)
 function onMouseClick(e)
 {
 	game.onMouseClick(e);
+}
+
+function onMouseMove(e)
+{
+	game.onMouseMove(e);
 }

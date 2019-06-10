@@ -4,6 +4,10 @@ import Cha from "./cha.js"
 export default class Game {
 	constructor() {
 		this.name = "game";
+		this.debugMode = false;
+
+		this.screenWidth = window.innerWidth;
+		this.screenHeight = window.innerHeight;
 	}
 
 	init(panel) {
@@ -11,6 +15,8 @@ export default class Game {
 		// this.emitter = new DanceEmitter();
 		// window.eventBus = this.emitter;
 		
+		this.container = document.createElement( 'div' );
+		document.body.appendChild( this.container );
 
 		this.scene = new THREE.Scene();
 		this.scene.background = new THREE.Color( 0xbfe3dd );
@@ -23,28 +29,44 @@ export default class Game {
 		//this.camera = new THREE.PerspectiveCamera( 50, window.innerWidth/window.innerHeight, 0.1, 1000 );
 		let aspect = window.innerWidth/window.innerHeight;
 		this.cameraFrustumSize = 70;
-		this.camera = new THREE.OrthographicCamera( this.cameraFrustumSize*aspect/-2, this.cameraFrustumSize*aspect/2, this.cameraFrustumSize/2, this.cameraFrustumSize/-2, 0.1, 1000 );
 		
+		if (this.debugMode)
+		{			
+			this.observeCamera = new THREE.PerspectiveCamera( 50, 0.5 * aspect, 1, 10000 );
+			this.observeCamera.position.y = 100;
+			this.observeCamera.position.x = 100;
+			this.observeCamera.position.z = 100;
+			this.observeCamera.lookAt(0,0,0);
+			this.scene.add(this.observeCamera);
+
+			this.camera = new THREE.OrthographicCamera( 0.5 * this.cameraFrustumSize*aspect/-2, 0.5 * this.cameraFrustumSize*aspect/2, this.cameraFrustumSize/2, this.cameraFrustumSize/-2, 1, 500 );
+			this.scene.add(this.camera);
+			this.cameraHelper = new THREE.CameraHelper( this.camera );
+			this.scene.add( this.cameraHelper );
+		}
+		else
+		{
+			this.camera = new THREE.OrthographicCamera( this.cameraFrustumSize*aspect/-2, this.cameraFrustumSize*aspect/2, this.cameraFrustumSize/2, this.cameraFrustumSize/-2, 1, 500 );
+			this.scene.add(this.camera);
+		}
+
 		this.renderer = new THREE.WebGLRenderer( {antialias: true} );
 		this.renderer.setPixelRatio( window.devicePixelRatio );
 		this.renderer.setSize( window.innerWidth, window.innerHeight );
-		this.container = document.createElement( 'div' );
-		document.body.appendChild( this.container );
 		this.container.appendChild( this.renderer.domElement );
+		if(this.debugMode)
+		{
+			this.renderer.autoClear = false;
+			this.renderer.autoClearColor = false;
+		}
 
-		// this.cameraControl = new THREE.OrbitControls(this.camera);
-		// this.cameraControl.target.set( 0, 0, 0 );
-		// this.cameraControl.enablePan = false;
-		// this.cameraControl.update();
-		this.camera.position.set( 0, 13, 30 );
+		this.camera.position.set( 0, 13, 30 );	//0,13,30
 		this.camera.lookAt( 0,0,0 );
-
-		// this.cameraOrthoHelper = new THREE.CameraHelper( this.camera );
-		// this.scene.add( this.cameraOrthoHelper );
-		// this.cameraOrthoHelper.visible = true;
 
 		this.raycaster = new THREE.Raycaster();
 		this.mouse = new THREE.Vector2();
+		this.moveMouse = new THREE.Vector3();
+		this.moveMousePosition = new THREE.Vector3();
 
 		var geometry = new THREE.CylinderBufferGeometry( 0, 10, 30, 4, 1 );
 		var material = new THREE.MeshPhongMaterial( { color: 0xffffff } );
@@ -64,6 +86,11 @@ export default class Game {
 		this.ground.rotation.x = -90 * Math.PI/180;
 		this.scene.add(this.ground);
 
+		geometry = new THREE.SphereGeometry(2);
+		material = new THREE.MeshBasicMaterial({color: 0x0000ff});
+		this.mouseBall = new THREE.Mesh(geometry, material);
+		this.scene.add(this.mouseBall);
+
 		this.Cha = new Cha(this.scene);
 		this.scene.add(this.Cha);
 		this.camera.target = this.Cha;
@@ -75,15 +102,20 @@ export default class Game {
 		this.panel = panel;
 		this.setupCameraPanel();
 		//this.Cha.setupPanel(this.panel);
+
+		var dir = new THREE.Vector3( 1,0,0 );
+		this.arrowHelper = new THREE.ArrowHelper(dir, this.camera.position, 10, 0xff0000);
+		console.log(this.arrowHelper);
+		this.scene.add(this.arrowHelper);
 	}
 
 	setupCameraPanel()
 	{
 		let folder = this.panel.addFolder("Camera");
 		this.cameraPanelSettings = {
-			"position x": 0,
-			"position y": 13,
-			"position z": 30,
+			"position x": this.camera.position.x,
+			"position y": this.camera.position.y,
+			"position z": this.camera.position.z,
 		};
 		folder.add(this.cameraPanelSettings, "position x", -50.0, 50.0, 0.1).onChange((position)=>{
 			this.setCameraPosition("x", position);
@@ -102,17 +134,17 @@ export default class Game {
 		{
 			case "x":
 			this.camera.position.x = position;
-			//this.camera.lookAt( 0,0,0 );
+			// this.camera.lookAt( 0,0,0 );
 			this.camera.updateProjectionMatrix();
 			break;
 			case "y":
 			this.camera.position.y = position;
-			//this.camera.lookAt( 0,0,0 );
+			// this.camera.lookAt( 0,0,0 );
 			this.camera.updateProjectionMatrix();
 			break;
 			case "z":
 			this.camera.position.z = position;
-			//this.camera.lookAt( 0,0,0 );
+			// this.camera.lookAt( 0,0,0 );
 			this.camera.updateProjectionMatrix();
 			break;
 		}
@@ -131,22 +163,58 @@ export default class Game {
 
 	animate(delta) {
 		this.Cha.update(delta);
-		//this.cameraControl.update(delta);
-		this.cameraFollow(delta);
-		this.renderer.render( this.scene, this.camera );
+		//this.cameraFollow(delta);
+		this.render(delta);
+	}
+
+	render(delta)
+	{
+		if (this.debugMode)
+		{
+			this.camera.far = 100;
+			this.camera.updateProjectionMatrix();
+			this.cameraHelper.update();
+			this.cameraHelper.visible = true;
+
+			this.renderer.clear();
+
+			this.cameraHelper.visible = true;
+			this.renderer.setViewport(0, 0, this.screenWidth/2, this.screenHeight);
+			// this.renderer.render(this.scene, this.observeCamera);
+			this.renderer.render(this.scene, this.camera);
+
+			this.cameraHelper.visible = true;
+			this.renderer.setViewport(this.screenWidth/2, 0, this.screenWidth/2, this.screenHeight);
+			// this.renderer.render(this.scene, this.camera);
+			this.renderer.render(this.scene, this.observeCamera);
+		}
+		else
+		{
+			this.renderer.render( this.scene, this.camera );
+		}
 	}
 
 	onWindowResize()
 	{
-		//this.camera.aspect = window.innerWidth / window.innerHeight;
-		let aspect = window.innerWidth/window.innerHeight;
-		this.camera.left = - this.cameraFrustumSize * aspect / 2;
-		this.camera.right = this.cameraFrustumSize * aspect / 2;
+		this.screenWidth = window.innerWidth;
+		this.screenHeight = window.innerHeight;
+		this.renderer.setSize(this.screenWidth, this.screenHeight);
+
+		let aspect = this.screenWidth/this.screenHeight;
+
+		if(this.debugMode)
+		{
+			this.observeCamera.aspect = 0.5*aspect;
+			this.observeCamera.updateProjectionMatrix();
+		}
+
+		let ratio = 1;
+		if(this.debugMode) ratio = 0.5;
+		this.camera.left = - ratio * this.cameraFrustumSize * aspect / 2;
+		this.camera.right = ratio * this.cameraFrustumSize * aspect / 2;
 		this.camera.top = this.cameraFrustumSize / 2;
 		this.camera.bottom = - this.cameraFrustumSize / 2;
-
 		this.camera.updateProjectionMatrix();
-		this.renderer.setSize(window.innerWidth, window.innerHeight);
 	}
 
 	onKeyDown(keyCode)
@@ -156,6 +224,9 @@ export default class Game {
 		{
 			// a, s, d
 			case 65:
+			this.Cha.lookReset();
+			break;
+			
 			case 83:
 			case 68:
 			break;
@@ -189,10 +260,37 @@ export default class Game {
 	onMouseClick(event)
 	{
 		event.preventDefault();
+		// this.mouse.x = (event.clientX / this.renderer.domElement.clientWidth) * 2 - 1;
+		// this.mouse.y = - (event.clientY / this.renderer.domElement.clientHeight) * 2 + 1;
+
+		this.checkRaycast();
+	}
+
+	onMouseMove(event)
+	{
 		this.mouse.x = (event.clientX / this.renderer.domElement.clientWidth) * 2 - 1;
 		this.mouse.y = - (event.clientY / this.renderer.domElement.clientHeight) * 2 + 1;
 
-		this.checkRaycast();
+		// Convert Screen space to World space
+		/*
+		this.moveMouse.set(
+				(event.clientX / this.screenWidth) * 2 - 1,
+				- (event.clientY / this.screenHeight) * 2 + 1,
+				0.5
+			);
+		this.moveMouse.unproject(this.camera);
+		this.moveMouse.sub(this.camera.position).normalize();
+		//let distance = (0 - this.camera.position.z) / this.moveMouse.z;
+		let distance = this.camera.far;
+		this.arrowHelper.position.copy(this.camera.position);
+		this.arrowHelper.setDirection(this.moveMouse);
+		this.arrowHelper.setLength(distance, distance*0.2, distance*0.2*0.2);
+		this.moveMousePosition.copy(this.camera.position).add(this.moveMouse.multiplyScalar(distance));
+		*/
+		this.raycaster.setFromCamera(this.mouse, this.camera);
+		this.moveMousePosition = this.Cha.updateHeadLookAt(this.raycaster);
+		if(this.moveMousePosition)
+			this.mouseBall.position.copy(this.moveMousePosition);
 	}
 
 	checkRaycast()
