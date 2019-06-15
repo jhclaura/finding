@@ -2,10 +2,10 @@
 import Util from "./util.js"
 
 export default class Cha extends THREE.Object3D {
-	constructor(scene) {
+	constructor(scene, modelLoader) {
 		super();
 		this.scene = scene;
-
+		this.modelLoader = modelLoader;
 		this.finishedLoading = false;
 		this.init();
 	}
@@ -27,19 +27,22 @@ export default class Cha extends THREE.Object3D {
 				}
 			}
 		});
+
+		this.modelLoader.load("./assets/models/cha_gameExport.glb", (gltf)=>{this.onLoadModel(gltf);});
+
 		this.moveTarget = new THREE.Vector3();
 		this.rotateTarget = new THREE.Quaternion();
 		this.headLookTarget = new THREE.Quaternion();
 
 		this.util = new Util();
 
-		let geo = new THREE.SphereGeometry(15);
-		let mat = new THREE.MeshBasicMaterial({visible: false, color: 0x00ffff});
-		this.invisibleDome = new THREE.Mesh(geo, mat);
-		this.invisibleDome.position.y = 3;
+		// let geo = new THREE.SphereGeometry(15);
+		// let mat = new THREE.MeshBasicMaterial({visible: false, color: 0x00ffff});
+		// this.invisibleDome = new THREE.Mesh(geo, mat);
+		// this.invisibleDome.position.y = 3;
 
-		geo = new THREE.CylinderGeometry( 0, 2, 4, 5 );
-		mat = new THREE.MeshLambertMaterial({ color: 0x777777 });
+		let geo = new THREE.CylinderGeometry( 0, 2, 4, 5 );
+		let mat = new THREE.MeshLambertMaterial({ color: 0x777777 });
 		this.dummyHead = new THREE.Mesh(geo, mat);
 		this.dummyHead.visible = false;
 		this.dummyHead.scale.multiplyScalar(2);
@@ -59,10 +62,11 @@ export default class Cha extends THREE.Object3D {
 		console.log(this.animations);
 		this.add(this.model);
 
-		this.model.add(this.invisibleDome);
+		//this.model.add(this.invisibleDome);
 		// ===== Debug look =====
 		this.headJoint = this.model.children[0].children[0].children[0].children[2].children[0].children[0].children[2];
 		this.model.children[0].children[0].children[0].children[2].children[0].children[0].attach(this.dummyHead);
+		this.lookQuaternionBase = this.dummyHead.quaternion;
 
 		// Bounding box
 		this.model.traverse (function (mesh)
@@ -89,7 +93,13 @@ export default class Cha extends THREE.Object3D {
 		this.bboxHelper = new THREE.Box3Helper( this.bbox, 0xffff00 );
 		this.add(this.bboxHelper);
 
-		this.finishedLoading = true;
+		this.modelLoader.load("./assets/models/cha_frontShield.glb", (gltf)=>{
+			this.invisibleEditDome = gltf.scene.children[0].children[0];
+			this.invisibleEditDome.scale.multiplyScalar(1000);
+			this.invisibleEditDome.material.visible = false;
+			this.model.add(this.invisibleEditDome);
+			this.finishedLoading = true;
+		});
 	}
 
 	onAniLoopFinished(e)
@@ -208,23 +218,37 @@ export default class Cha extends THREE.Object3D {
 
 	updateHeadLookAt(raycaster)
 	{
+		if (!this.finishedLoading) return null;
+
 		let intersects = [];
-		this.invisibleDome.raycast(raycaster, intersects);
+		this.invisibleEditDome.raycast(raycaster, intersects);
 		if (intersects.length>0)
-		{
-			this.headLookTarget.copy(this.dummyHead.quaternion);
-			this.headJoint.quaternion.copy(this.headLookTarget);
-			this.headJoint.lookAt(intersects[0].point);
-			this.headJoint.quaternion.multiply(this.headLookTarget.inverse());
+		{	
+			// ver. Instant
+			// this.headLookTarget.copy(this.dummyHead.quaternion);
+			// this.headJoint.quaternion.copy(this.headLookTarget);
+			// this.headJoint.lookAt(intersects[0].point);
+			// this.headJoint.quaternion.multiply(this.headLookTarget.inverse());
+
+			// ver. Lerp
+			let q1 = this.dummyHead.quaternion.clone();
+			this.headLookTarget.copy(q1);
+			this.headLookTarget = this.util.quaternionLookAt(this.headJoint, intersects[0].point);
+			this.headLookTarget.multiply(q1.inverse());
+
+			this.headJoint.quaternion.slerp( this.headLookTarget, 0.05 );
 
 			return intersects[0].point;
 		}
 		else
+		{
+			this.lookReset(0.05);
 			return null;
+		}
 	}
 
-	lookReset()
+	lookReset(speed = 0.1)
 	{
-		this.headJoint.quaternion.slerp( this.identityQuaternion, 0.1 );
+		this.headJoint.quaternion.slerp( this.identityQuaternion, speed );
 	}
 }

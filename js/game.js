@@ -91,12 +91,10 @@ export default class Game {
 		this.mouseBall = new THREE.Mesh(geometry, material);
 		this.scene.add(this.mouseBall);
 
-		this.Cha = new Cha(this.scene);
+		this.modelLoader = new ModelLoader();
+		this.Cha = new Cha(this.scene, this.modelLoader);
 		this.scene.add(this.Cha);
 		this.camera.target = this.Cha;
-
-		this.modelLoader = new ModelLoader();
-		this.modelLoader.load("./assets/models/cha_gameExport.glb", (gltf)=>{this.Cha.onLoadModel(gltf);});
 		
 		// DAT.GUI
 		this.panel = panel;
@@ -163,7 +161,7 @@ export default class Game {
 
 	animate(delta) {
 		this.Cha.update(delta);
-		//this.cameraFollow(delta);
+		this.cameraFollow(delta);
 		this.render(delta);
 	}
 
@@ -287,10 +285,11 @@ export default class Game {
 		this.arrowHelper.setLength(distance, distance*0.2, distance*0.2*0.2);
 		this.moveMousePosition.copy(this.camera.position).add(this.moveMouse.multiplyScalar(distance));
 		*/
+		
 		this.raycaster.setFromCamera(this.mouse, this.camera);
 		this.moveMousePosition = this.Cha.updateHeadLookAt(this.raycaster);
-		if(this.moveMousePosition)
-			this.mouseBall.position.copy(this.moveMousePosition);
+		// if(this.moveMousePosition)
+		// 	this.mouseBall.position.copy(this.moveMousePosition);
 	}
 
 	checkRaycast()
