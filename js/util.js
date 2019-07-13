@@ -45,4 +45,9 @@ export default class Util {
 		}
 		return q1;
 	}
+
+	getKeyByValue(object, value)
+	{
+		return Object.keys(object).find(key => object[key] === value);
+	}
 }

@@ -12,11 +12,14 @@ export default class Cha extends THREE.Object3D {
 
 	init()
 	{
+		this.currentAction = "";
 		this.fsm = new StateMachine({
 			init: 'idle',
 			transitions: [
 				{name: 'walk', from: 'idle', to: 'follow'},
-				{name: 'stopWalking', from: 'follow', to: 'idle'}
+				{name: 'stopWalking', from: 'follow', to: 'idle'},
+				{name: 'capture', from: ['idle', 'follow'], to: 'clap'},
+				{name: 'drop', from: 'clap', to: 'idle'}
 			],
 			methods: {
 				onWalk: ()=>{
@@ -24,9 +27,28 @@ export default class Cha extends THREE.Object3D {
 				},
 				onStopWalking: ()=>{
 					this.prepareCrossFade(this.actionDictionary.walk, this.actionDictionary.idle, 0.5);
+				},
+				onCapture: (lifecycle)=>{
+					eventBus.emit("onCapture");
+					//console.log("onCapture! lifecycle.from: " + lifecycle.from);
+					this.actionDictionary.clap.reset();
+					if (lifecycle.from == 'idle')
+						this.prepareCrossFade(this.actionDictionary.idle, this.actionDictionary.clap, 0.5);
+					else
+						this.prepareCrossFade(this.actionDictionary.walk, this.actionDictionary.clap, 0.5);
+				},
+				onDrop: ()=>{
+					this.actionDictionary.throw.paused = false;
+					TweenMax.to( this.spineJoint.children[0].quaternion, 0.5, {x:0, y:0, z:0, w:1, delay: 0.5} );
+					this.prepareCrossFade(this.actionDictionary.clap, this.actionDictionary.throw, 0.5);
+
+					setTimeout(()=>{
+						eventBus.emit("throwFinish");
+					}, 500);
 				}
 			}
 		});
+		this.justCaptured = false;
 
 		this.modelLoader.load("./assets/models/cha_gameExport.glb", (gltf)=>{this.onLoadModel(gltf);});
 
@@ -36,11 +58,6 @@ export default class Cha extends THREE.Object3D {
 
 		this.util = new Util();
 
-		// let geo = new THREE.SphereGeometry(15);
-		// let mat = new THREE.MeshBasicMaterial({visible: false, color: 0x00ffff});
-		// this.invisibleDome = new THREE.Mesh(geo, mat);
-		// this.invisibleDome.position.y = 3;
-
 		let geo = new THREE.CylinderGeometry( 0, 2, 4, 5 );
 		let mat = new THREE.MeshLambertMaterial({ color: 0x777777 });
 		this.dummyHead = new THREE.Mesh(geo, mat);
@@ -49,6 +66,43 @@ export default class Cha extends THREE.Object3D {
 		this.dummyHead.position.y = 15;
 
 		this.identityQuaternion = new THREE.Quaternion();
+
+		// Dialogue
+
+		this.dialogueContainer = document.createElement('div');
+		this.dialogueContainer.id = "cha_type_wrap";
+		this.dialogueContainer.className = "type_wrap";
+		this.dialogueContainer.style.top = window.innerHeight/4 + "px";
+		this.dialogueContainer.style.left = window.innerWidth/3 + "px";
+		document.body.appendChild(this.dialogueContainer);
+
+		this.dialogue = document.createElement('span');
+		this.dialogue.id = "cha_type";
+		this.dialogueContainer.appendChild(this.dialogue);
+
+		this.dialogueCursor = document.createElement('span');
+		this.dialogueCursor.className = "typed-cursor typed-cursor--blink";
+		this.dialogueContainer.appendChild(this.dialogueCursor);
+
+		this.typed = new Typed("#cha_type", {
+			strings: ["<i>First</i> sentence.", "&amp; a second sentence.", " "],
+			typeSpeed: 40,
+			backDelay: 500,
+			startDelay: 1000,
+			showCursor: false,
+  			cursorChar: '<',
+  			onStart: (arrayPos, self)=>{
+  				console.log("Cha's dialogue starts!");
+  				self.showCursor = true;
+  			},
+			onComplete: (self)=>{
+				console.log("Cha's dialogue ends!");
+				self.showCursor = false;
+				self.reset();
+				self.stop();
+			}
+		});
+		this.typed.stop();
 	}
 
 	onLoadModel(gltf)
@@ -62,9 +116,10 @@ export default class Cha extends THREE.Object3D {
 		console.log(this.animations);
 		this.add(this.model);
 
-		//this.model.add(this.invisibleDome);
+		this.spineJoint = this.model.children[0].children[0].children[0].children[2];
 		// ===== Debug look =====
 		this.headJoint = this.model.children[0].children[0].children[0].children[2].children[0].children[0].children[2];
+		this.rHandJoint = this.model.children[0].children[0].children[0].children[2].children[0].children[0].children[1].children[0].children[0].children[0];
 		this.model.children[0].children[0].children[0].children[2].children[0].children[0].attach(this.dummyHead);
 		this.lookQuaternionBase = this.dummyHead.quaternion;
 
@@ -75,6 +130,7 @@ export default class Cha extends THREE.Object3D {
 	        {
 	            //mesh.geometry.computeBoundingBox ();
 	            // mesh.frustumCulled = false;
+	            mesh.tag = "cha";
 	        }
 	    });
 
@@ -84,9 +140,15 @@ export default class Cha extends THREE.Object3D {
 		{
 			this.actionDictionary[this.animations[i].name] = this.animationMixer.clipAction(this.animations[i].optimize());
 		}
-		this.activateAllActions("idle");
 
-		//this.animationMixer.addEventListener( "loop", (e)=>{this.onAniLoopFinished(e);} );
+		this.actionDictionary.clap.loop = THREE.LoopOnce;
+		this.actionDictionary.clap.clampWhenFinished = true;
+
+		this.activateAllActions("idle");
+		this.currentAction = 'idle';
+
+		this.animationMixer.addEventListener( "loop", (e)=>{this.onAniLoopFinished(e);} );
+		this.animationMixer.addEventListener( "finished", (e)=>{this.onAniFinished(e);} );
 
 		// Bounding box
 		this.bbox = new THREE.Box3().setFromObject(this.model);
@@ -96,7 +158,8 @@ export default class Cha extends THREE.Object3D {
 		this.modelLoader.load("./assets/models/cha_frontShield.glb", (gltf)=>{
 			this.invisibleEditDome = gltf.scene.children[0].children[0];
 			this.invisibleEditDome.scale.multiplyScalar(1000);
-			this.invisibleEditDome.material.visible = false;
+			//this.invisibleEditDome.material.visible = false;
+			this.invisibleEditDome.visible = false;
 			this.model.add(this.invisibleEditDome);
 			this.finishedLoading = true;
 		});
@@ -104,12 +167,69 @@ export default class Cha extends THREE.Object3D {
 
 	onAniLoopFinished(e)
 	{
-		switch(e.action._clip.name)
+		let aniName = e.action._clip.name;
+		switch(aniName)
 		{
 			// case "walk":
 			// if(e.action.weight==1)
 			// 	this.model.children[0].children[0].position.z += 0.01;
 			// break;
+
+			case "clap":
+			if (this.actionDictionary[aniName].weight==1)
+			{
+				console.log("pause clap");
+				// this.pauseAllActions();
+				// this.actionDictionary[aniName].time = 1;
+			}
+			break;
+
+			case "throw":
+			if (this.actionDictionary[aniName].weight==1)
+			{
+				this.actionDictionary[aniName].weight = 0;
+				//this.actionDictionary.idle.weight = 1;
+				// console.log("unpause all");
+				// this.unPauseAllActions();
+				//eventBus.emit("throwFinish");
+				this.prepareCrossFade(this.actionDictionary.throw, this.actionDictionary.idle, 0.5);
+			}
+			break;
+		}
+	}
+
+	onAniFinished(e)
+	{
+		let aniName = e.action._clip.name;
+		switch(aniName)
+		{
+			// case "walk":
+			// if(e.action.weight==1)
+			// 	this.model.children[0].children[0].position.z += 0.01;
+			// break;
+
+			case "clap":
+			if (this.actionDictionary[aniName].weight==1){
+				console.log("clap finished");
+				eventBus.emit("clapFinish");
+			}
+			break;
+		}
+	}
+
+	pauseAllActions()
+	{
+		for (let key in this.actionDictionary)
+		{
+			this.actionDictionary[key].paused = true;
+		}
+	}
+
+	unPauseAllActions()
+	{
+		for (let key in this.actionDictionary)
+		{
+			this.actionDictionary[key].paused = false;
 		}
 	}
 
@@ -155,6 +275,7 @@ export default class Cha extends THREE.Object3D {
 		this.setActionWeight(endAction, 1);
 		endAction.time = 0;
 		startAction.crossFadeTo(endAction, duration, true);//.setEffectiveWeight(0);
+		this.currentAction = this.util.getKeyByValue(this.actionDictionary, endAction);
 	}
 
 	getRootWorldPosition(vector3)
@@ -195,6 +316,10 @@ export default class Cha extends THREE.Object3D {
 					this.fsm.stopWalking();
 			}
 			break;
+
+			// case 'clap':
+			// console.log(this.actionDictionary.clap.time);
+			// break;
 		}
 	}
 
@@ -237,6 +362,8 @@ export default class Cha extends THREE.Object3D {
 			this.headLookTarget.multiply(q1.inverse());
 
 			this.headJoint.quaternion.slerp( this.headLookTarget, 0.05 );
+			// this.spineJoint.quaternion.slerp( this.headLookTarget, 0.05 );
+			// this.spineJoint.children[0].quaternion.slerp( this.headLookTarget, 0.05 );
 
 			return intersects[0].point;
 		}
@@ -250,5 +377,34 @@ export default class Cha extends THREE.Object3D {
 	lookReset(speed = 0.1)
 	{
 		this.headJoint.quaternion.slerp( this.identityQuaternion, speed );
+	}
+
+	bePoked (location)
+	{
+		//this.typed.toggle();
+		if(this.fsm.can('capture') && !this.justCaptured)
+		{
+			console.log("cha capture!");
+			this.fsm.capture();
+			this.justCaptured = true;
+			setTimeout(()=>{
+				this.justCaptured = false;
+			}, 1000);
+
+			// tween body to arrow
+			// TweenMax.to( this.spineJoint.quaternion, 0.5, {x:this.headLookTarget.x, y:this.headLookTarget.y, z:this.headLookTarget.z, w:this.headLookTarget.w, delay: 0.5} );
+			//TweenMax.to( this.spineJoint.children[0].quaternion, 0.5, {x:this.headLookTarget.x, y:this.headLookTarget.y, z:this.headLookTarget.z, w:this.headLookTarget.w, delay: 0.5} );
+		}
+		else if (this.fsm.can('drop'))
+		{
+			console.log("cha drop!");
+			this.fsm.drop();
+		}
+	}
+
+	onWindowResize()
+	{
+		this.dialogueContainer.style.top = window.innerHeight/4 + "px";
+		this.dialogueContainer.style.left = window.innerWidth/3 + "px";
 	}
 }

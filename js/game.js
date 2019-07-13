@@ -1,5 +1,9 @@
 import ModelLoader from "./modelLoader.js"
 import Cha from "./cha.js"
+import Prop from "./prop.js"
+import PhysicsProp from "./physicsProp.js"
+import Physics from "./physics.js"
+import Util from "./util.js"
 
 export default class Game {
 	constructor() {
@@ -8,13 +12,17 @@ export default class Game {
 
 		this.screenWidth = window.innerWidth;
 		this.screenHeight = window.innerHeight;
+
+		this.camToChaHeight = 50;
+		this.camToChaDistance = 120;
 	}
 
 	init(panel) {
-		// class DanceEmitter extends Events {}
-		// this.emitter = new DanceEmitter();
-		// window.eventBus = this.emitter;
+		class FinderEmitter extends Events {}
+		this.emitter = new FinderEmitter();
+		window.eventBus = this.emitter;
 		
+		// ENVIRONMENT_SETUP
 		this.container = document.createElement( 'div' );
 		document.body.appendChild( this.container );
 
@@ -23,12 +31,13 @@ export default class Game {
 
 		this.ambientLight = new THREE.AmbientLight( 0xd8d8d8 );
 		this.directionalLight = new THREE.DirectionalLight( 0xffffff,1 );
+		this.directionalLight.castShadow = true;
 		this.scene.add( this.ambientLight );
 		this.scene.add( this.directionalLight );
 
 		//this.camera = new THREE.PerspectiveCamera( 50, window.innerWidth/window.innerHeight, 0.1, 1000 );
 		let aspect = window.innerWidth/window.innerHeight;
-		this.cameraFrustumSize = 70;
+		this.cameraFrustumSize = 90;
 		
 		if (this.debugMode)
 		{			
@@ -40,6 +49,7 @@ export default class Game {
 			this.scene.add(this.observeCamera);
 
 			this.camera = new THREE.OrthographicCamera( 0.5 * this.cameraFrustumSize*aspect/-2, 0.5 * this.cameraFrustumSize*aspect/2, this.cameraFrustumSize/2, this.cameraFrustumSize/-2, 1, 500 );
+			this.camera.updateProjectionMatrix();
 			this.scene.add(this.camera);
 			this.cameraHelper = new THREE.CameraHelper( this.camera );
 			this.scene.add( this.cameraHelper );
@@ -53,6 +63,7 @@ export default class Game {
 		this.renderer = new THREE.WebGLRenderer( {antialias: true} );
 		this.renderer.setPixelRatio( window.devicePixelRatio );
 		this.renderer.setSize( window.innerWidth, window.innerHeight );
+		this.renderer.shadowMap.enabled = true;
 		this.container.appendChild( this.renderer.domElement );
 		if(this.debugMode)
 		{
@@ -60,7 +71,7 @@ export default class Game {
 			this.renderer.autoClearColor = false;
 		}
 
-		this.camera.position.set( 0, 13, 30 );	//0,13,30
+		this.camera.position.set( 0, this.camToChaHeight, this.camToChaDistance );	//0,13,30
 		this.camera.lookAt( 0,0,0 );
 
 		this.raycaster = new THREE.Raycaster();
@@ -68,6 +79,10 @@ export default class Game {
 		this.moveMouse = new THREE.Vector3();
 		this.moveMousePosition = new THREE.Vector3();
 
+		// PHYSICS
+		this.ammo = new Physics(()=>{this.createPhysicsObjects();});
+
+		// OBJECTS
 		var geometry = new THREE.CylinderBufferGeometry( 0, 10, 30, 4, 1 );
 		var material = new THREE.MeshPhongMaterial( { color: 0xffffff } );
 		for ( var i = 0; i < 500; i ++ ) {
@@ -80,31 +95,88 @@ export default class Game {
 			this.scene.add( mesh );
 		}
 
-		geometry = new THREE.PlaneGeometry(100,100,1,1);
-		material = new THREE.MeshLambertMaterial({color: 0xaaaaaa});
+		geometry = new THREE.BoxBufferGeometry(500, 0.01, 500, 1, 1, 1);
+		material = new THREE.MeshLambertMaterial({color: 0x787878});
 		this.ground = new THREE.Mesh(geometry, material);
-		this.ground.rotation.x = -90 * Math.PI/180;
+		this.ground.tag = "ground";
+		this.ground.receiveShadow = true;
 		this.scene.add(this.ground);
+		this.ammo.createParallelepiped(this.ground, 0, this.ground.position, this.ground.quaternion);
 
-		geometry = new THREE.SphereGeometry(2);
-		material = new THREE.MeshBasicMaterial({color: 0x0000ff});
-		this.mouseBall = new THREE.Mesh(geometry, material);
-		this.scene.add(this.mouseBall);
+		// geometry = new THREE.SphereGeometry(1);
+		// material = new THREE.MeshBasicMaterial({color: 0x0000ff});
+		// this.mouseBall = new THREE.Mesh(geometry, material);
+		// this.mouseBall.name = "arrow";
+		// this.scene.add(this.mouseBall);
 
 		this.modelLoader = new ModelLoader();
 		this.Cha = new Cha(this.scene, this.modelLoader);
 		this.scene.add(this.Cha);
 		this.camera.target = this.Cha;
+
+		// Arrow
+		let arrowMaterial = new THREE.MeshBasicMaterial({color:0xffffff, depthTest: false})
+		this.arrow = new PhysicsProp( "./assets/models/arrow.glb", this.scene, this.modelLoader, arrowMaterial, this.ammo, ()=>{
+			//console.log("arrow loaded!");
+			this.arrow.updateScale(830);
+			this.arrow.position.y = 20;
+			this.arrow.rotation.x = -20 * Math.PI/180;
+			this.arrow.initPhysics(20, 1, true); // mass, friction, isKinematic
+
+			this.arrow.beLerping = false;
+			this.arrow.originalQ = new THREE.Quaternion();
+			this.arrow.originalQ.copy(this.arrow.quaternion);
+			this.arrow.tmpVector3 = new THREE.Vector3();
+			this.arrow.normalMaterial = new THREE.MeshBasicMaterial({color:0xffffff, map: this.arrow.model.material.map});
+		});
+		this.arrow.visible = false;
+		//this.container.style.cursor = "none";
+
+		this.scene.add(this.arrow);
 		
 		// DAT.GUI
 		this.panel = panel;
 		this.setupCameraPanel();
 		//this.Cha.setupPanel(this.panel);
 
-		var dir = new THREE.Vector3( 1,0,0 );
-		this.arrowHelper = new THREE.ArrowHelper(dir, this.camera.position, 10, 0xff0000);
-		console.log(this.arrowHelper);
-		this.scene.add(this.arrowHelper);
+		this.util = new Util();
+
+		// var dir = new THREE.Vector3( 1,0,0 );
+		// this.arrowHelper = new THREE.ArrowHelper(dir, this.camera.position, 10, 0xff0000);
+		// console.log(this.arrowHelper);
+		// this.scene.add(this.arrowHelper);
+
+		// Events
+		eventBus.on("onCapture", ()=>{
+			this.arrow.updateKinematicBodyTransform(this.moveMouse, this.arrow.quaternion);
+			this.toggleCursor();
+		});
+
+		eventBus.on("clapFinish", ()=>{
+			this.arrow.beGrabbed = true;
+
+			let target = new THREE.Vector3();
+			target = this.Cha.rHandJoint.getWorldPosition(target);
+			this.arrow.grabOffset.addVectors(this.arrow.position, target.multiplyScalar(-1));
+
+			this.arrow.changeFromDynamicToKinematic();
+		});
+
+		eventBus.on("throwFinish", ()=>{
+			this.arrow.beGrabbed = false;
+
+			this.arrow.changeFromKinematicToDynamic();
+
+			let relPos = new THREE.Vector3(0,5,0);
+			relPos.y += this.arrow.position.y;
+			this.arrow.applyImpulse(new THREE.Vector3(0,-150,0), relPos);
+
+			setTimeout(()=>{
+				this.arrow.changeFromDynamicToKinematic();
+				this.arrow.beLerping = true;
+			}, 3000);
+		});
+
 	}
 
 	setupCameraPanel()
@@ -154,14 +226,45 @@ export default class Game {
 		let target = new THREE.Vector3();
 		target = this.camera.target.getRootWorldPosition(target);
 		if (target == null) return;
-		target.y += 13;
-		target.z += 30;
+		target.y += this.camToChaHeight;
+		target.z += this.camToChaDistance;
 		this.camera.position.lerp(target, delta*1);
 	}
 
-	animate(delta) {
+	animate(delta)
+	{
+		this.ammo.update(delta);
 		this.Cha.update(delta);
+		this.moveMousePosition = this.Cha.updateHeadLookAt(this.raycaster);
+
 		this.cameraFollow(delta);
+
+		if (this.arrow.beGrabbed)
+		{
+			let target = new THREE.Vector3();
+			target = this.Cha.rHandJoint.getWorldPosition(target);
+			target.add(this.arrow.grabOffset);
+			this.arrow.updateKinematicBodyTransform(target, this.arrow.quaternion);
+		}
+		else if (this.arrow.beLerping)
+		{
+			let target = new THREE.Vector3();
+			//target.lerpVectors(this.arrow.position, this.moveMouse, delta*2 );
+			target.copy(this.arrow.position);
+			this.util.vector3MoveTowards(target, this.moveMouse, delta*15);
+			let targetQ = new THREE.Quaternion();
+			THREE.Quaternion.slerp( this.arrow.quaternion, this.arrow.originalQ, targetQ, delta*4 );
+
+			this.arrow.updateKinematicBodyTransform(target, targetQ);
+
+			if (this.arrow.position.distanceToSquared(this.moveMouse)<0.2*0.2)
+			{
+				this.arrow.beLerping = false;
+				this.arrow.updateKinematicBodyTransform(target, this.arrow.originalQ);
+				this.toggleCursor();
+			}
+		}
+
 		this.render(delta);
 	}
 
@@ -169,8 +272,8 @@ export default class Game {
 	{
 		if (this.debugMode)
 		{
-			this.camera.far = 100;
-			this.camera.updateProjectionMatrix();
+			//this.camera.far = 100;
+			//this.camera.updateProjectionMatrix();
 			this.cameraHelper.update();
 			this.cameraHelper.visible = true;
 
@@ -213,6 +316,9 @@ export default class Game {
 		this.camera.top = this.cameraFrustumSize / 2;
 		this.camera.bottom = - this.cameraFrustumSize / 2;
 		this.camera.updateProjectionMatrix();
+
+		//Cha
+		this.Cha.onWindowResize();
 	}
 
 	onKeyDown(keyCode)
@@ -220,12 +326,17 @@ export default class Game {
 		//console.log(keyCode);
 		switch (keyCode)
 		{
-			// a, s, d
+			// a
 			case 65:
 			this.Cha.lookReset();
 			break;
 			
+			// s
 			case 83:
+			this.container.style.cursor = "auto";
+			break;
+
+			// d
 			case 68:
 			break;
 
@@ -233,6 +344,11 @@ export default class Game {
 			case 37:
 			case 40:
 			case 39:
+			break;
+
+			// h
+			case 72:
+			this.container.style.cursor = "none";
 			break;
 		}
 	}
@@ -268,14 +384,11 @@ export default class Game {
 	{
 		this.mouse.x = (event.clientX / this.renderer.domElement.clientWidth) * 2 - 1;
 		this.mouse.y = - (event.clientY / this.renderer.domElement.clientHeight) * 2 + 1;
+		this.raycaster.setFromCamera(this.mouse, this.camera);
 
 		// Convert Screen space to World space
 		/*
-		this.moveMouse.set(
-				(event.clientX / this.screenWidth) * 2 - 1,
-				- (event.clientY / this.screenHeight) * 2 + 1,
-				0.5
-			);
+		this.moveMouse.set((event.clientX / this.screenWidth) * 2 - 1, - (event.clientY / this.screenHeight) * 2 + 1, 0.5);
 		this.moveMouse.unproject(this.camera);
 		this.moveMouse.sub(this.camera.position).normalize();
 		//let distance = (0 - this.camera.position.z) / this.moveMouse.z;
@@ -285,24 +398,77 @@ export default class Game {
 		this.arrowHelper.setLength(distance, distance*0.2, distance*0.2*0.2);
 		this.moveMousePosition.copy(this.camera.position).add(this.moveMouse.multiplyScalar(distance));
 		*/
-		
-		this.raycaster.setFromCamera(this.mouse, this.camera);
-		this.moveMousePosition = this.Cha.updateHeadLookAt(this.raycaster);
-		// if(this.moveMousePosition)
-		// 	this.mouseBall.position.copy(this.moveMousePosition);
+
+		this.moveMouse.set(
+				(event.clientX / this.screenWidth) * 2 - 1,
+				- (event.clientY / this.screenHeight) * 2 + 1,
+				-0.52 //-0.997
+			);
+		this.moveMouse.unproject(this.camera);
+
+		if(this.arrow.visible && !this.arrow.beGrabbed && !this.arrow.beLerping)
+		{
+			//this.arrow.position.copy(this.moveMousePosition);
+
+			// Update Kinematic Arrow
+			this.arrow.updateKinematicBodyTransform(this.moveMouse, this.arrow.quaternion);
+		}
+	}
+
+	raycastGround()
+	{
+		let intersections = this.raycaster.intersectObject(this.ground);
+		if (intersections.length > 0)
+		{
+			this.arrow.tmpVector3 = intersections[0].point;
+			this.arrow.tmpVector3.y+=2;
+			this.arrow.updateKinematicBodyTransform(this.arrow.tmpVector3, this.arrow.quaternion);
+		}
 	}
 
 	checkRaycast()
 	{
 		this.raycaster.setFromCamera(this.mouse, this.camera);
-		let intersections = this.raycaster.intersectObjects(this.scene.children);
+		let intersections = this.raycaster.intersectObjects(this.scene.children, true);
 		if (intersections.length > 0)
 		{
-			if(intersections[0].object == this.ground)
+			let targetObject = intersections[0].object;
+			let targetPoint = intersections[0].point;
+			if (intersections[0].object.name=="arrow")
 			{
-				console.log(intersections[0].point);
-				this.Cha.updateMoveTarget(intersections[0].point);
+				if (intersections.length > 1){
+					targetObject = intersections[1].object;
+					targetPoint = intersections[1].point;
+				}
+			}
+			console.log(targetObject);
+
+			switch (targetObject.tag)
+			{
+				case "cha":
+				this.Cha.bePoked(intersections[0].point);
+				break;
+
+				case "ground":
+				console.log(targetPoint);
+				this.Cha.updateMoveTarget(targetPoint);
+				break;
 			}
 		}
+
+		//test
+		//this.scene.add(this.ammo.throwBall(this.raycaster));
+		// this.scene.add(this.ammo.throwBox(this.raycaster));
+		this.scene.add(this.ammo.throw(this.arrow.model, this.arrow.normalMaterial, this.raycaster));
+	}
+
+	toggleCursor()
+	{
+		this.arrow.visible = !this.arrow.visible;
+
+		if (!this.arrow.visible)
+			this.container.style.cursor = "auto";
+		else
+			this.container.style.cursor = "none";
 	}
 }

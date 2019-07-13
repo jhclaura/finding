@@ -34,6 +34,7 @@ function start()
 	window.addEventListener('keyup', onKeyUp, false);
 	window.addEventListener('click', onMouseClick, false);
 	window.addEventListener('mousemove', onMouseMove, false);
+	
 	animate();
 }
 
