@@ -55,6 +55,7 @@ export default class Cha extends THREE.Object3D {
 		this.moveTarget = new THREE.Vector3();
 		this.rotateTarget = new THREE.Quaternion();
 		this.headLookTarget = new THREE.Quaternion();
+		this.rootWorldPosition = new THREE.Vector3();
 
 		this.util = new Util();
 
@@ -281,9 +282,15 @@ export default class Cha extends THREE.Object3D {
 	getRootWorldPosition(vector3)
 	{
 		if (this.model)
-			return this.model.children[0].children[0].getWorldPosition(vector3);
+		{
+			this.model.children[0].children[0].getWorldPosition(vector3)
+			this.rootWorldPosition.copy(vector3);
+			return vector3;
+		}
 		else
+		{
 			return null;
+		}
 	}
 
 	update(delta)

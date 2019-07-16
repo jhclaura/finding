@@ -4,6 +4,7 @@ import Prop from "./prop.js"
 import PhysicsProp from "./physicsProp.js"
 import Physics from "./physics.js"
 import Util from "./util.js"
+import CreatureCreator from "./creatureCreator.js"
 
 export default class Game {
 	constructor() {
@@ -133,6 +134,9 @@ export default class Game {
 		//this.container.style.cursor = "none";
 
 		this.scene.add(this.arrow);
+
+		this.creatureCreator = new CreatureCreator(this.ammo);
+
 		
 		// DAT.GUI
 		this.panel = panel;
@@ -236,7 +240,7 @@ export default class Game {
 		this.ammo.update(delta);
 		this.Cha.update(delta);
 		this.moveMousePosition = this.Cha.updateHeadLookAt(this.raycaster);
-
+		this.creatureCreator.follow(this.Cha.rootWorldPosition);
 		this.cameraFollow(delta);
 
 		if (this.arrow.beGrabbed)
@@ -378,6 +382,10 @@ export default class Game {
 		// this.mouse.y = - (event.clientY / this.renderer.domElement.clientHeight) * 2 + 1;
 
 		this.checkRaycast();
+
+		//
+		let newCreature = this.creatureCreator.create();
+		this.scene.add(newCreature);
 	}
 
 	onMouseMove(event)
@@ -459,7 +467,7 @@ export default class Game {
 		//test
 		//this.scene.add(this.ammo.throwBall(this.raycaster));
 		// this.scene.add(this.ammo.throwBox(this.raycaster));
-		this.scene.add(this.ammo.throw(this.arrow.model, this.arrow.normalMaterial, this.raycaster));
+		this.scene.add(this.ammo.throw(this.arrow.model, this.arrow.normalMaterial, this.arrow.shape, this.raycaster));
 	}
 
 	toggleCursor()

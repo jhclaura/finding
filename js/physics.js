@@ -66,7 +66,50 @@ export default class Physics
 		}
 		newShape.setMargin(this.margin);
 		return newShape;
-	}	
+	}
+
+	createShapeFromBuffergeometry(bufGeometry)
+	{
+		let coords = bufGeometry.attributes.position.array;		
+		let newShape = new Ammo.btConvexHullShape();
+		for(let i=0, il=coords.length; i<il; i+=3)
+		{
+			this.tempBtVec3_1.setValue(coords[i], coords[i+1], coords[i+2]);
+			
+			let lastOne = (i >= (il-3));	// bool to if recalculateLocalAabb(???) of ConvextHullShape
+			newShape.addPoint(this.tempBtVec3_1, lastOne);
+		}
+		newShape.setMargin(this.margin);
+		return newShape;
+	}
+
+	createBoxShape(scale)
+	{
+		let newShape = new Ammo.btBoxShape(new Ammo.btVector3(scale.x*0.5, scale.y*0.5, scale.z*0.5));
+		newShape.setMargin(this.margin);
+		return newShape;
+	}
+
+	createSphereShape(radius)
+	{
+		let newShape = new Ammo.btSphereShape(radius);
+		newShape.setMargin(this.margin);
+		return newShape;
+	}
+
+	createCylinderShape(radius, height)
+	{
+		let newShape = new Ammo.btCylinderShape(new Ammo.btVector3(radius, height*0.5, radius));
+		newShape.setMargin(this.margin);
+		return newShape;
+	}
+
+	createConeShape(radius, height)
+	{
+		let newShape = new Ammo.btConeShape(radius, height);
+		newShape.setMargin(this.margin);
+		return newShape;
+	}
 
 	throwBall(raycaster)
 	{
@@ -115,17 +158,15 @@ export default class Physics
 		return ball;
 	}
 
-	throw(referenceMesh, referenceMaterial, raycaster)
+	throw(referenceMesh, referenceMaterial, referenceShape, raycaster)
 	{
 		let stuff = new THREE.Mesh(referenceMesh.geometry, referenceMaterial);
 		stuff.scale.multiply(referenceMesh.scale); 
 		stuff.castShadow = true;
-
-		let stuffShape = this.createShapeFromBuffergeometryMesh(stuff);
 		
 		this.pos.set(2,10,0);
 		this.quat.set(0,0,0,1);
-		let stuffBody = this.createRigidBody(stuff, stuffShape, 20, this.pos, this.quat);
+		let stuffBody = this.createRigidBody(stuff, referenceShape, 20, this.pos, this.quat);
 		stuffBody.setFriction(1);
 		this.pos.set(0,-10,1);
 		stuffBody.setLinearVelocity(new Ammo.btVector3(this.pos.x, this.pos.y, this.pos.z));
@@ -170,6 +211,14 @@ export default class Physics
 		this.physicsWorld.addRigidBody(body);
 
 		return body;
+	}
+
+	createP2PConstraint(body1, body2, v1, v2)
+	{
+		let p1 = new Ammo.btVector3(v1.x, v1.y, v1.z);
+		let p2 = new Ammo.btVector3(v2.x, v2.y, v2.z);
+		let p2p = new Ammo.btPoint2PointConstraint(body1, body2, p1, p2);
+		this.physicsWorld.addConstraint(p2p);	// bool: Disable Collisions Between Linked Bodies
 	}
 
 	updateKinematicBody(body, pos, quat)
