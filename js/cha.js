@@ -1,5 +1,5 @@
 // Animation reference: https://github.com/mrdoob/three.js/blob/master/examples/webgl_animation_skinning_blending.html
-import Util from "./util.js"
+// import Util from "./util.js"
 
 export default class Cha extends THREE.Object3D {
 	constructor(scene, modelLoader) {
@@ -7,6 +7,8 @@ export default class Cha extends THREE.Object3D {
 		this.scene = scene;
 		this.modelLoader = modelLoader;
 		this.finishedLoading = false;
+		this.showRaycastHelper = false;
+
 		this.init();
 	}
 
@@ -19,7 +21,9 @@ export default class Cha extends THREE.Object3D {
 				{name: 'walk', from: 'idle', to: 'follow'},
 				{name: 'stopWalking', from: 'follow', to: 'idle'},
 				{name: 'capture', from: ['idle', 'follow'], to: 'clap'},
-				{name: 'drop', from: 'clap', to: 'idle'}
+				{name: 'drop', from: 'clap', to: 'idle'},
+				{name: 'pickDown', from: ['idle', 'follow'], to: 'pick'},
+				{name: 'pickUp', from: 'pick', to: 'idle'}
 			],
 			methods: {
 				onWalk: ()=>{
@@ -45,6 +49,12 @@ export default class Cha extends THREE.Object3D {
 					setTimeout(()=>{
 						eventBus.emit("throwFinish");
 					}, 500);
+				},
+				onPickDown: (lifecycle)=>{
+					if (lifecycle.from == 'idle')
+						this.prepareCrossFade(this.actionDictionary.idle, this.actionDictionary.squad, 0.5);
+					else
+						this.prepareCrossFade(this.actionDictionary.walk, this.actionDictionary.squad, 0.5);
 				}
 			}
 		});
@@ -57,7 +67,7 @@ export default class Cha extends THREE.Object3D {
 		this.headLookTarget = new THREE.Quaternion();
 		this.rootWorldPosition = new THREE.Vector3();
 
-		this.util = new Util();
+		// this.util = new Util();
 
 		let geo = new THREE.CylinderGeometry( 0, 2, 4, 5 );
 		let mat = new THREE.MeshLambertMaterial({ color: 0x777777 });
@@ -104,6 +114,22 @@ export default class Cha extends THREE.Object3D {
 			}
 		});
 		this.typed.stop();
+
+		// --------Collision--------
+		if (this.showRaycastHelper)
+		{
+			var dir = new THREE.Vector3( 0, 0, 1 );
+			var origin = new THREE.Vector3( 0, 1, 0 );
+			var length = 5;
+			var hex = 0xff0000;
+			this.arrowHelper = new THREE.ArrowHelper( dir, origin, length, hex );
+			this.add(this.arrowHelper);
+		}
+		this.collisionRaycaster = new THREE.Raycaster();
+		this.collisionRaycaster.far = 5;
+		this.raycastOrigin = new THREE.Vector3();
+		this.raycastDirection = new THREE.Vector3();
+		this.previousCollider = null;
 	}
 
 	onLoadModel(gltf)
@@ -116,6 +142,9 @@ export default class Cha extends THREE.Object3D {
 		this.animations = this.gltf.animations;
 		console.log(this.animations);
 		this.add(this.model);
+
+		// if (this.showRaycastHelper)
+		// 	this.model.add(this.arrowHelper);
 
 		this.spineJoint = this.model.children[0].children[0].children[0].children[2];
 		// ===== Debug look =====
@@ -139,7 +168,7 @@ export default class Cha extends THREE.Object3D {
 		this.actionDictionary = {};
 		for(let i=0; i<this.animations.length; i++)
 		{
-			this.actionDictionary[this.animations[i].name] = this.animationMixer.clipAction(this.animations[i].optimize());
+			this.actionDictionary[this.animations[i].name] = this.animationMixer.clipAction(this.animations[i]);//this.animations[i].optimize()
 		}
 
 		this.actionDictionary.clap.loop = THREE.LoopOnce;
@@ -188,12 +217,27 @@ export default class Cha extends THREE.Object3D {
 			case "throw":
 			if (this.actionDictionary[aniName].weight==1)
 			{
+				console.log("throw end");
+
 				this.actionDictionary[aniName].weight = 0;
 				//this.actionDictionary.idle.weight = 1;
 				// console.log("unpause all");
 				// this.unPauseAllActions();
 				//eventBus.emit("throwFinish");
 				this.prepareCrossFade(this.actionDictionary.throw, this.actionDictionary.idle, 0.5);
+			}
+			break;
+
+			case "pickUp":
+			if (this.actionDictionary[aniName].weight==1)
+			{
+				console.log("pickUp end");
+
+				this.actionDictionary[aniName].weight = 0;
+				// this.actionDictionary.idle.weight = 1;
+				//eventBus.emit("throwFinish");
+				this.fsm.pickUp();
+				this.prepareCrossFade(this.actionDictionary.squad, this.actionDictionary.idle, 0.5);
 			}
 			break;
 		}
@@ -276,7 +320,7 @@ export default class Cha extends THREE.Object3D {
 		this.setActionWeight(endAction, 1);
 		endAction.time = 0;
 		startAction.crossFadeTo(endAction, duration, true);//.setEffectiveWeight(0);
-		this.currentAction = this.util.getKeyByValue(this.actionDictionary, endAction);
+		this.currentAction = userUtil.getKeyByValue(this.actionDictionary, endAction);
 	}
 
 	getRootWorldPosition(vector3)
@@ -315,7 +359,7 @@ export default class Cha extends THREE.Object3D {
 			this.model.quaternion.slerp(this.rotateTarget, delta*5);
 
 			//this.model.position.lerp(this.moveTarget, delta * 1);
-			this.util.vector3MoveTowards(this.model.position, this.moveTarget, delta*10);
+			userUtil.vector3MoveTowards(this.model.position, this.moveTarget, delta*10);
 			//console.log(this.model.children[0].position.distanceTo(this.moveTarget));
 			if (this.model.position.distanceToSquared(this.moveTarget) < 1.5 * 1.5)
 			{
@@ -328,12 +372,48 @@ export default class Cha extends THREE.Object3D {
 			// console.log(this.actionDictionary.clap.time);
 			// break;
 		}
+
+		// --------COLLISION DETECTION--------
+		this.model.getWorldPosition(this.raycastOrigin);
+		this.raycastOrigin.y += 1;
+		this.model.getWorldDirection(this.raycastDirection);
+		this.collisionRaycaster.set(this.raycastOrigin, this.raycastDirection);
+
+		if (this.showRaycastHelper)
+		{
+			this.arrowHelper.position.copy(this.raycastOrigin);
+			this.arrowHelper.setDirection(this.raycastDirection);
+		}
+
+		let intersect = this.collisionRaycaster.intersectObjects(this.scene.children);
+		if (intersect.length>0)
+		{
+			//console.log("Cha hits " + intersect[0].object);
+			let intersectObject = intersect[0].object;
+			if (intersectObject.tag == "trigger")
+			{
+				if (intersectObject != this.previousCollider)
+				{
+					//console.log("Cha hits " + intersectObject.name);
+					eventBus.emit("ChaCollideTrigger", intersectObject.name);
+				}
+				this.previousCollider = intersectObject;
+			}
+			else
+			{
+				this.previousCollider = null;
+			}
+		}
+		else
+		{
+			this.previousCollider = null;
+		}
 	}
 
 	updateMoveTarget(moveTarget)
 	{
 		//this.model.lookAt(moveTarget);
-		this.rotateTarget = this.util.quaternionLookAt(this.model, moveTarget);
+		this.rotateTarget = userUtil.quaternionLookAt(this.model, moveTarget);
 		//this.moveTarget = this.model.worldToLocal(moveTarget);
 		this.moveTarget = moveTarget;
 		
@@ -365,7 +445,7 @@ export default class Cha extends THREE.Object3D {
 			// ver. Lerp
 			let q1 = this.dummyHead.quaternion.clone();
 			this.headLookTarget.copy(q1);
-			this.headLookTarget = this.util.quaternionLookAt(this.headJoint, intersects[0].point);
+			this.headLookTarget = userUtil.quaternionLookAt(this.headJoint, intersects[0].point);
 			this.headLookTarget.multiply(q1.inverse());
 
 			this.headJoint.quaternion.slerp( this.headLookTarget, 0.05 );
@@ -406,6 +486,19 @@ export default class Cha extends THREE.Object3D {
 		{
 			console.log("cha drop!");
 			this.fsm.drop();
+		}
+	}
+
+	pickUp(object)
+	{
+		switch (object.tag)
+		{
+			case "crumb":
+			if(this.fsm.can('pickDown'))
+			{
+				this.fsm.pickDown();
+			}
+			break;
 		}
 	}
 

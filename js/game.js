@@ -5,6 +5,7 @@ import PhysicsProp from "./physicsProp.js"
 import Physics from "./physics.js"
 import Util from "./util.js"
 import CreatureCreator from "./creatureCreator.js"
+import ChapterManager from "./chapterManager.js"
 
 export default class Game {
 	constructor() {
@@ -22,7 +23,10 @@ export default class Game {
 		class FinderEmitter extends Events {}
 		this.emitter = new FinderEmitter();
 		window.eventBus = this.emitter;
-		
+
+		this.util = new Util();
+		window.userUtil = this.util;
+
 		// ENVIRONMENT_SETUP
 		this.container = document.createElement( 'div' );
 		document.body.appendChild( this.container );
@@ -32,7 +36,7 @@ export default class Game {
 
 		this.ambientLight = new THREE.AmbientLight( 0xd8d8d8 );
 		this.directionalLight = new THREE.DirectionalLight( 0xffffff,1 );
-		this.directionalLight.castShadow = true;
+		// this.directionalLight.castShadow = true;
 		this.scene.add( this.ambientLight );
 		this.scene.add( this.directionalLight );
 
@@ -64,7 +68,7 @@ export default class Game {
 		this.renderer = new THREE.WebGLRenderer( {antialias: true} );
 		this.renderer.setPixelRatio( window.devicePixelRatio );
 		this.renderer.setSize( window.innerWidth, window.innerHeight );
-		this.renderer.shadowMap.enabled = true;
+		// this.renderer.shadowMap.enabled = true;
 		this.container.appendChild( this.renderer.domElement );
 		if(this.debugMode)
 		{
@@ -85,7 +89,7 @@ export default class Game {
 
 		// OBJECTS
 		var geometry = new THREE.CylinderBufferGeometry( 0, 10, 30, 4, 1 );
-		var material = new THREE.MeshPhongMaterial( { color: 0xffffff } );
+		var material = new THREE.MeshLambertMaterial( { color: 0xffffff } );
 		for ( var i = 0; i < 500; i ++ ) {
 			var mesh = new THREE.Mesh( geometry, material );
 			mesh.position.x = Math.random() * 1600 - 800;
@@ -100,7 +104,7 @@ export default class Game {
 		material = new THREE.MeshLambertMaterial({color: 0x787878});
 		this.ground = new THREE.Mesh(geometry, material);
 		this.ground.tag = "ground";
-		this.ground.receiveShadow = true;
+		// this.ground.receiveShadow = true;
 		this.scene.add(this.ground);
 		this.ammo.createParallelepiped(this.ground, 0, this.ground.position, this.ground.quaternion);
 
@@ -118,7 +122,6 @@ export default class Game {
 		// Arrow
 		let arrowMaterial = new THREE.MeshBasicMaterial({color:0xffffff, depthTest: false})
 		this.arrow = new PhysicsProp( "./assets/models/arrow.glb", this.scene, this.modelLoader, arrowMaterial, this.ammo, ()=>{
-			//console.log("arrow loaded!");
 			this.arrow.updateScale(830);
 			this.arrow.position.y = 20;
 			this.arrow.rotation.x = -20 * Math.PI/180;
@@ -137,13 +140,13 @@ export default class Game {
 
 		this.creatureCreator = new CreatureCreator(this.ammo);
 
+		this.chapterManager = new ChapterManager(this.scene, this.ammo, this.modelLoader, this.creatureCreator);
 		
 		// DAT.GUI
 		this.panel = panel;
 		this.setupCameraPanel();
-		//this.Cha.setupPanel(this.panel);
 
-		this.util = new Util();
+		
 
 		// var dir = new THREE.Vector3( 1,0,0 );
 		// this.arrowHelper = new THREE.ArrowHelper(dir, this.camera.position, 10, 0xff0000);
@@ -240,8 +243,9 @@ export default class Game {
 		this.ammo.update(delta);
 		this.Cha.update(delta);
 		this.moveMousePosition = this.Cha.updateHeadLookAt(this.raycaster);
-		this.creatureCreator.follow(this.Cha.rootWorldPosition);
+		//this.creatureCreator.follow(this.Cha.rootWorldPosition);
 		this.cameraFollow(delta);
+		this.chapterManager.update(delta);
 
 		if (this.arrow.beGrabbed)
 		{
@@ -354,6 +358,16 @@ export default class Game {
 			case 72:
 			this.container.style.cursor = "none";
 			break;
+
+			// e
+			case 69:
+			this.chapterManager.end();
+			break;
+
+			// c
+			case 67:
+			this.chapterManager.cleanup();
+			break;
 		}
 	}
 
@@ -383,9 +397,9 @@ export default class Game {
 
 		this.checkRaycast();
 
-		//
-		let newCreature = this.creatureCreator.create();
-		this.scene.add(newCreature);
+		// --------TEST---------
+		// let newCreature = this.creatureCreator.create();
+		// this.scene.add(newCreature);
 	}
 
 	onMouseMove(event)
@@ -458,16 +472,26 @@ export default class Game {
 				break;
 
 				case "ground":
-				console.log(targetPoint);
+				//console.log(targetPoint);
 				this.Cha.updateMoveTarget(targetPoint);
+				break;
+
+				case "creature":
+				targetObject.parent.onClick();
+				break;
+
+				case "creatureBody":
+				targetObject.parent.parent.onClick();
+				break;
+
+				case "crumb":
+				this.Cha.pickUp(targetObject);
 				break;
 			}
 		}
 
 		//test
-		//this.scene.add(this.ammo.throwBall(this.raycaster));
-		// this.scene.add(this.ammo.throwBox(this.raycaster));
-		this.scene.add(this.ammo.throw(this.arrow.model, this.arrow.normalMaterial, this.arrow.shape, this.raycaster));
+		// this.scene.add(this.ammo.throw(this.arrow.model, this.arrow.normalMaterial, this.arrow.shape));
 	}
 
 	toggleCursor()

@@ -1,5 +1,5 @@
 import Creature from "./creature.js"
-import Util from "./util.js"
+import SameCreature from "./sameCreature.js"
 
 export default class CreatureCreator
 {
@@ -7,7 +7,7 @@ export default class CreatureCreator
 	{
 		this.ammo = ammo;
 
-		this.creatures = [];
+		//this.creatures = [];
 		this.types = ["box", "sphere", "cylinder", "cone", "tetrahedron"];
 		this.colors = [0xf7DEAD, 0xCD4439, 0x72B896, 0x6F7777];
 
@@ -15,13 +15,13 @@ export default class CreatureCreator
 		this.shapes = {};
 		this.materials = [];
 
+		this.sizeScalar = 2;
+
 		this.basePosition = new THREE.Vector3(10,10,10);
 		this.baseScale = new THREE.Vector3(1,1,1);
 		this.baseRadius = 0.5;
-		this.baseHeight = 2;
+		this.baseHeight = 1;
 		this.baseMass = 2;
-
-		this.util = new Util();
 
 		// re-use variables
 		this.vec3_1 = new THREE.Vector3();
@@ -31,7 +31,10 @@ export default class CreatureCreator
 
 	init()
 	{
-		
+		this.baseScale.multiplyScalar(this.sizeScalar);
+		this.baseRadius *= this.sizeScalar;
+		this.baseHeight *= this.sizeScalar;
+
 		for(let i=0; i<this.types.length; i++)
 		{
 			// pre-create some primitive graphics shapes
@@ -52,17 +55,26 @@ export default class CreatureCreator
 
 	follow(targetPosition)
 	{
-		for(let i=0; i<this.creatures.length; i++)
-		{
-			this.vec3_1.subVectors(targetPosition, this.creatures[i].head.position).multiplyScalar(50);
-			this.creatures[i].follow(this.vec3_1);
-		}
+		// for(let i=0; i<this.creatures.length; i++)
+		// {
+		// 	this.vec3_1.subVectors(targetPosition, this.creatures[i].head.position).multiplyScalar(50);
+		// 	this.creatures[i].follow(this.vec3_1);
+		// }
 	}
 
-	create()
+	create(startPosition)
 	{
+		if (startPosition) this.basePosition = startPosition;
 		let n_creature = new Creature(this, this.ammo, this.basePosition);
-		this.creatures.push(n_creature);
+		//this.creatures.push(n_creature);
+		return n_creature;
+	}
+
+	createInSame(startPosition)
+	{
+		if (startPosition) this.basePosition = startPosition;
+		let n_creature = new SameCreature(this, this.ammo, this.basePosition);
+		//this.creatures.push(n_creature);
 		return n_creature;
 	}
 
@@ -73,17 +85,17 @@ export default class CreatureCreator
 
 	getRandomType()
 	{
-		return this.types[this.util.getRandomInt(0, this.types.length)];
+		return this.types[userUtil.getRandomInt(0, this.types.length)];
 	}
 
 	getRandomColor()
 	{
-		return this.colors[this.util.getRandomInt(0, this.colors.length)];
+		return this.colors[userUtil.getRandomInt(0, this.colors.length)];
 	}
 
 	getRandomMaterial()
 	{
-		return this.materials[this.util.getRandomInt(0, this.materials.length)];		
+		return this.materials[userUtil.getRandomInt(0, this.materials.length)];		
 	}
 
 	getGeometryByType(type)
@@ -94,6 +106,11 @@ export default class CreatureCreator
 	getShapeByType(type)
 	{
 		return this.shapes[type];
+	}
+
+	getIndexByType(type)
+	{
+		return this.types.indexOf(type);
 	}
 
 	createGeometryByType(type)
