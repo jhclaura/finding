@@ -7,13 +7,14 @@ import LazyChapter from "./chapters/lazy.js"
 
 export default class ChapterManager
 {
-	constructor(scene, ammo, modelLoader, creatureCreator)
+	constructor(scene, ammo, modelLoader, creatureCreator, cha)
 	{
 		this.chapterNames = ["lazy", "lost", "same", "like", "confident", "jealous"];
 		this.scene = scene;
 		this.ammo = ammo;
 		this.modelLoader = modelLoader;
 		this.creatureCreator = creatureCreator;
+		this.cha = cha;
 
 		this.currentChapter;
 		this.triggers = {};
@@ -59,7 +60,7 @@ export default class ChapterManager
 		switch(chapter)
 		{
 			case "lazy":
-			this.currentChapter = new LazyChapter(this.ammo, this.modelLoader, this.creatureCreator);
+			this.currentChapter = new LazyChapter(this.ammo, this.modelLoader, this.creatureCreator, this.cha);
 			break;
 
 			case "lost":

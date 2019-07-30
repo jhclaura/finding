@@ -140,7 +140,7 @@ export default class Game {
 
 		this.creatureCreator = new CreatureCreator(this.ammo);
 
-		this.chapterManager = new ChapterManager(this.scene, this.ammo, this.modelLoader, this.creatureCreator);
+		this.chapterManager = new ChapterManager(this.scene, this.ammo, this.modelLoader, this.creatureCreator, this.Cha);
 		
 		// DAT.GUI
 		this.panel = panel;

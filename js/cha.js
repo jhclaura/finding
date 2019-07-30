@@ -22,24 +22,34 @@ export default class Cha extends THREE.Object3D {
 				{name: 'stopWalking', from: 'follow', to: 'idle'},
 				{name: 'capture', from: ['idle', 'follow'], to: 'clap'},
 				{name: 'drop', from: 'clap', to: 'idle'},
-				{name: 'pickDown', from: ['idle', 'follow'], to: 'pick'},
-				{name: 'pickUp', from: 'pick', to: 'idle'}
+				{name: 'goPick', from: ['idle', 'follow'], to: 'goPick'},
+				{name: 'pickUp', from: ['idle', 'follow', 'goPick'], to: 'picking'},
+				{name: 'stopPicking', from: 'picking', to: 'idle'},
+				{name: 'sqaudDown', from: ['idle', 'follow'], to: 'sqaud'},
+				{name: 'stopSqauding', from: 'sqaud', to: 'idle'}
 			],
 			methods: {
 				onWalk: ()=>{
 					this.prepareCrossFade(this.actionDictionary.idle, this.actionDictionary.walk, 0.5);
+					eventBus.emit("ChaStartWalking");
 				},
 				onStopWalking: ()=>{
 					this.prepareCrossFade(this.actionDictionary.walk, this.actionDictionary.idle, 0.5);
+					eventBus.emit("ChaStopWalking");
 				},
 				onCapture: (lifecycle)=>{
 					eventBus.emit("onCapture");
 					//console.log("onCapture! lifecycle.from: " + lifecycle.from);
 					this.actionDictionary.clap.reset();
 					if (lifecycle.from == 'idle')
+					{
 						this.prepareCrossFade(this.actionDictionary.idle, this.actionDictionary.clap, 0.5);
+					}
 					else
+					{
 						this.prepareCrossFade(this.actionDictionary.walk, this.actionDictionary.clap, 0.5);
+						eventBus.emit("ChaStopWalking");
+					}
 				},
 				onDrop: ()=>{
 					this.actionDictionary.throw.paused = false;
@@ -50,11 +60,23 @@ export default class Cha extends THREE.Object3D {
 						eventBus.emit("throwFinish");
 					}, 500);
 				},
-				onPickDown: (lifecycle)=>{
+				onGoPick: (lifecycle)=>{
 					if (lifecycle.from == 'idle')
-						this.prepareCrossFade(this.actionDictionary.idle, this.actionDictionary.squad, 0.5);
-					else
-						this.prepareCrossFade(this.actionDictionary.walk, this.actionDictionary.squad, 0.5);
+					{
+						this.prepareCrossFade(this.actionDictionary.idle, this.actionDictionary.walk, 0.5);
+						eventBus.emit("ChaStartWalking");
+					}
+				},
+				onPickUp: (lifecycle)=>{
+					if (lifecycle.from == 'idle')
+					{
+						this.prepareCrossFade(this.actionDictionary.idle, this.actionDictionary.pickUp, 0.5);
+					}
+					else if (lifecycle.from == 'walk' || lifecycle.from == 'goPick')
+					{
+						this.prepareCrossFade(this.actionDictionary.walk, this.actionDictionary.pickUp, 0.5);
+						eventBus.emit("ChaStopWalking");
+					}
 				}
 			}
 		});
@@ -67,8 +89,6 @@ export default class Cha extends THREE.Object3D {
 		this.headLookTarget = new THREE.Quaternion();
 		this.rootWorldPosition = new THREE.Vector3();
 
-		// this.util = new Util();
-
 		let geo = new THREE.CylinderGeometry( 0, 2, 4, 5 );
 		let mat = new THREE.MeshLambertMaterial({ color: 0x777777 });
 		this.dummyHead = new THREE.Mesh(geo, mat);
@@ -78,8 +98,7 @@ export default class Cha extends THREE.Object3D {
 
 		this.identityQuaternion = new THREE.Quaternion();
 
-		// Dialogue
-
+		// --------Dialogue--------
 		this.dialogueContainer = document.createElement('div');
 		this.dialogueContainer.id = "cha_type_wrap";
 		this.dialogueContainer.className = "type_wrap";
@@ -130,6 +149,9 @@ export default class Cha extends THREE.Object3D {
 		this.raycastOrigin = new THREE.Vector3();
 		this.raycastDirection = new THREE.Vector3();
 		this.previousCollider = null;
+
+		// --------Pick Up--------
+		this.pickedObject;
 	}
 
 	onLoadModel(gltf)
@@ -148,7 +170,8 @@ export default class Cha extends THREE.Object3D {
 
 		this.spineJoint = this.model.children[0].children[0].children[0].children[2];
 		// ===== Debug look =====
-		this.headJoint = this.model.children[0].children[0].children[0].children[2].children[0].children[0].children[2];
+		this.neckJoint = this.model.children[0].children[0].children[0].children[2].children[0].children[0].children[2];
+		this.headJoint = this.neckJoint.children[0];
 		this.rHandJoint = this.model.children[0].children[0].children[0].children[2].children[0].children[0].children[1].children[0].children[0].children[0];
 		this.model.children[0].children[0].children[0].children[2].children[0].children[0].attach(this.dummyHead);
 		this.lookQuaternionBase = this.dummyHead.quaternion;
@@ -168,7 +191,10 @@ export default class Cha extends THREE.Object3D {
 		this.actionDictionary = {};
 		for(let i=0; i<this.animations.length; i++)
 		{
-			this.actionDictionary[this.animations[i].name] = this.animationMixer.clipAction(this.animations[i]);//this.animations[i].optimize()
+			// if (this.animations[i].name=='pickUp' || this.animations[i].name=='squad')
+				this.actionDictionary[this.animations[i].name] = this.animationMixer.clipAction(this.animations[i]);//this.animations[i].optimize()
+			// else
+			// 	this.actionDictionary[this.animations[i].name] = this.animationMixer.clipAction(this.animations[i].optimize());
 		}
 
 		this.actionDictionary.clap.loop = THREE.LoopOnce;
@@ -231,13 +257,12 @@ export default class Cha extends THREE.Object3D {
 			case "pickUp":
 			if (this.actionDictionary[aniName].weight==1)
 			{
-				console.log("pickUp end");
-
 				this.actionDictionary[aniName].weight = 0;
-				// this.actionDictionary.idle.weight = 1;
-				//eventBus.emit("throwFinish");
-				this.fsm.pickUp();
-				this.prepareCrossFade(this.actionDictionary.squad, this.actionDictionary.idle, 0.5);
+				this.fsm.stopPicking();
+				this.prepareCrossFade(this.actionDictionary.pickUp, this.actionDictionary.idle, 0.5);
+
+				if (this.pickedObject.tag=='crumb')
+					this.pickedObject.parent.bePickedFinal(this.pickedObject);
 			}
 			break;
 		}
@@ -355,7 +380,7 @@ export default class Cha extends THREE.Object3D {
 		switch(this.fsm.state)
 		{
 			case 'follow':
-			this.headJoint.quaternion.slerp( this.identityQuaternion, 0.1 );
+			this.neckJoint.quaternion.slerp( this.identityQuaternion, 0.1 );
 			this.model.quaternion.slerp(this.rotateTarget, delta*5);
 
 			//this.model.position.lerp(this.moveTarget, delta * 1);
@@ -365,6 +390,23 @@ export default class Cha extends THREE.Object3D {
 			{
 				if(this.fsm.can('stopWalking'))
 					this.fsm.stopWalking();
+			}
+			break;
+
+			case 'goPick':
+			this.neckJoint.quaternion.slerp( this.identityQuaternion, 0.1 );
+			this.model.quaternion.slerp(this.rotateTarget, delta*5);
+			userUtil.vector3MoveTowards(this.model.position, this.moveTarget, delta*10);
+			if (this.model.position.distanceToSquared(this.moveTarget) < 3*3)
+			{
+				if(this.fsm.can('pickUp'))
+				{
+					this.fsm.pickUp();
+					setTimeout(()=>{
+						// move donuts
+						this.pickedObject.parent.bePicked(this.pickedObject);
+					}, 800);
+				}	
 			}
 			break;
 
@@ -431,6 +473,7 @@ export default class Cha extends THREE.Object3D {
 	updateHeadLookAt(raycaster)
 	{
 		if (!this.finishedLoading) return null;
+		if (this.fsm.is('picking')) return null;
 
 		let intersects = [];
 		this.invisibleEditDome.raycast(raycaster, intersects);
@@ -438,17 +481,17 @@ export default class Cha extends THREE.Object3D {
 		{	
 			// ver. Instant
 			// this.headLookTarget.copy(this.dummyHead.quaternion);
-			// this.headJoint.quaternion.copy(this.headLookTarget);
-			// this.headJoint.lookAt(intersects[0].point);
-			// this.headJoint.quaternion.multiply(this.headLookTarget.inverse());
+			// this.neckJoint.quaternion.copy(this.headLookTarget);
+			// this.neckJoint.lookAt(intersects[0].point);
+			// this.neckJoint.quaternion.multiply(this.headLookTarget.inverse());
 
 			// ver. Lerp
 			let q1 = this.dummyHead.quaternion.clone();
 			this.headLookTarget.copy(q1);
-			this.headLookTarget = userUtil.quaternionLookAt(this.headJoint, intersects[0].point);
+			this.headLookTarget = userUtil.quaternionLookAt(this.neckJoint, intersects[0].point);
 			this.headLookTarget.multiply(q1.inverse());
 
-			this.headJoint.quaternion.slerp( this.headLookTarget, 0.05 );
+			this.neckJoint.quaternion.slerp( this.headLookTarget, 0.05 );
 			// this.spineJoint.quaternion.slerp( this.headLookTarget, 0.05 );
 			// this.spineJoint.children[0].quaternion.slerp( this.headLookTarget, 0.05 );
 
@@ -463,7 +506,7 @@ export default class Cha extends THREE.Object3D {
 
 	lookReset(speed = 0.1)
 	{
-		this.headJoint.quaternion.slerp( this.identityQuaternion, speed );
+		this.neckJoint.quaternion.slerp( this.identityQuaternion, speed );
 	}
 
 	bePoked (location)
@@ -494,9 +537,28 @@ export default class Cha extends THREE.Object3D {
 		switch (object.tag)
 		{
 			case "crumb":
-			if(this.fsm.can('pickDown'))
+			this.pickedObject = object;
+			if (this.model.position.distanceToSquared(object.position) > 3*3)
 			{
-				this.fsm.pickDown();
+				this.rotateTarget = userUtil.quaternionLookAt(this.model, object.position);
+				this.moveTarget.copy(object.position);
+				this.moveTarget.y = this.model.position.y;
+
+				if(this.fsm.can('goPick'))
+				{
+					this.fsm.goPick();
+				}
+			}
+			else
+			{
+				if(this.fsm.can('pickUp'))
+				{
+					this.fsm.pickUp();
+					setTimeout(()=>{
+						// move donuts
+						object.parent.bePicked(this.pickedObject);
+					}, 800);
+				}
 			}
 			break;
 		}

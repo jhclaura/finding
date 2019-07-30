@@ -26,6 +26,7 @@ export default class Physics
 		this.physicsWorld.setGravity( new Ammo.btVector3( 0, - this.gravityConstant, 0 ) );
 
 		this.transformAux1 = new Ammo.btTransform();
+		this.transformAux2 = new Ammo.btTransform();
 		this.tempBtVec3_1 = new Ammo.btVector3( 0, 0, 0 );
 
 		this.pos = new THREE.Vector3();
@@ -245,6 +246,29 @@ export default class Physics
 		let p2p = new Ammo.btPoint2PointConstraint(body1, body2, p1, p2);
 		body1.constraint = p2p;
 		this.physicsWorld.addConstraint(p2p);	// bool: Disable Collisions Between Linked Bodies
+	}
+
+	createConeConstraint(body1, body2, v1, v2)
+	{
+		this.transformAux1.setIdentity();
+		this.transformAux1.getBasis().setEulerZYX(0, Math.PI/2, 0);
+		this.transformAux1.setOrigin(new Ammo.btVector3(v1.x, v1.y, v1.z));
+
+		this.transformAux2.setIdentity();
+		this.transformAux2.getBasis().setEulerZYX(0, Math.PI/2, 0);
+		this.transformAux2.setOrigin(new Ammo.btVector3(v2.x, v2.y, v2.z));
+
+		body1.setActivationState(4);
+
+		let coneTwist = new Ammo.btConeTwistConstraint(body1, body2, this.transformAux1, this.transformAux2);
+		coneTwist.setLimit(3, 0);
+		coneTwist.setLimit(4, 0);
+		coneTwist.setLimit(5, 0);
+		//setLimit (btScalar _swingSpan1, btScalar _swingSpan2, btScalar _twistSpan, btScalar _softness=1.f, btScalar _biasFactor=0.3f, btScalar _relaxationFactor=1.0f)
+		// coneTwist.setLimit(0, 0, 0, 0.5, 0.3, 0.5);
+
+		body1.constraint = coneTwist;
+		this.physicsWorld.addConstraint(coneTwist);	// bool: Disable Collisions Between Linked Bodies, default false
 	}
 
 	removeConstraint(body)
