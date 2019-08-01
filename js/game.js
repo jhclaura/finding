@@ -100,9 +100,10 @@ export default class Game {
 			this.scene.add( mesh );
 		}
 
-		geometry = new THREE.BoxBufferGeometry(500, 0.01, 500, 1, 1, 1);
+		geometry = new THREE.BoxBufferGeometry(500, 1, 500, 1, 1, 1);
 		material = new THREE.MeshLambertMaterial({color: 0x787878});
 		this.ground = new THREE.Mesh(geometry, material);
+		this.ground.position.y -= 0.5;
 		this.ground.tag = "ground";
 		// this.ground.receiveShadow = true;
 		this.scene.add(this.ground);

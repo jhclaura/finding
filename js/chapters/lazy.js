@@ -40,7 +40,7 @@ export default class LazyChapter extends THREE.Object3D
 	}
 
 	setup()
-	{		
+	{
 		this.crumbOriginalQuaternion.setFromAxisAngle(new THREE.Vector3(0,1,0).normalize(), -90/180*Math.PI);
 
 		for(let i=0; i<this.colors.length; i++)
@@ -97,6 +97,33 @@ export default class LazyChapter extends THREE.Object3D
 		// 	this.crumbs.push(_c);
 		// 	console.log(this.crumbs[i]);
 		// }
+
+		// Create soft volumes
+		this.softBellyGeometry = new THREE.SphereBufferGeometry( 1.5, 40, 25 );
+		this.softBellyGeometry.translate( -10, 10, 0 );
+		this.ammo.processGeometryForSoftVolume(this.softBellyGeometry);
+
+		this.softBelly = new THREE.Mesh( this.softBellyGeometry, new THREE.MeshLambertMaterial( { color: 0xff917b } ) );
+		// this.softBelly.frustumCulled = false;
+		this.add( this.softBelly );
+
+		this.ammo.createSoftVolume( this.softBelly, this.softBellyGeometry, 15, 250 );
+
+
+		// Lazy dude
+		this.modelLoader.load("./assets/models/oneCube.glb", (gltf)=>{this.onLoadModel(gltf);});
+	}
+
+	onLoadModel(gltf)
+	{
+		console.log(gltf.scene);
+		this.lazyDudeModel = gltf.scene.children[0];
+		// this.lazyDudeModel.children[0].scale.multiplyScalar(100);
+		this.add(gltf.scene.children[0]);	// RootNode
+
+		let compareCube = new THREE.Mesh(new THREE.BoxBufferGeometry(1,1,1), new THREE.MeshLambertMaterial( { color: 0xff917b } ));
+		compareCube.position.x = 5;
+		this.add(compareCube);
 	}
 
 	update(delta)

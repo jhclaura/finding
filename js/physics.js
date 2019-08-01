@@ -4,10 +4,18 @@ export default class Physics
 {
 	constructor()
 	{
-		this.gravityConstant = 10;
+		this.gravityConstant = -10;
 		this.margin = 0.05;
-		this.rigidBodies = [];
 		this.inited = false;
+		this.isSoftBodyWorld = true;
+
+		this.rigidBodies = [];
+		this.staticColliders = [];
+		this.softBodies = [];
+
+		this.pos = new THREE.Vector3();
+		this.quat = new THREE.Quaternion();
+		this.testMaterial = new THREE.MeshPhongMaterial( { color: 0x787878 } );
 
 		Ammo().then((AmmoLib)=>{
 			Ammo = AmmoLib;
@@ -17,42 +25,39 @@ export default class Physics
 
 	init()
 	{
-		let collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();
-		let dispatcher = new Ammo.btCollisionDispatcher( collisionConfiguration );
-		let broadphase = new Ammo.btDbvtBroadphase();
-		let solver = new Ammo.btSequentialImpulseConstraintSolver();
+		if (this.isSoftBodyWorld)
+			this.collisionConfiguration = new Ammo.btSoftBodyRigidBodyCollisionConfiguration();
+		else
+			this.collisionConfiguration = new Ammo.btDefaultCollisionConfiguration();			
+		this.dispatcher = new Ammo.btCollisionDispatcher( this.collisionConfiguration );
+		this.broadphase = new Ammo.btDbvtBroadphase();
+		this.solver = new Ammo.btSequentialImpulseConstraintSolver();
 
-		this.physicsWorld = new Ammo.btDiscreteDynamicsWorld( dispatcher, broadphase, solver, collisionConfiguration );
-		this.physicsWorld.setGravity( new Ammo.btVector3( 0, - this.gravityConstant, 0 ) );
+		if (this.isSoftBodyWorld)
+		{
+			this.solfBodySolver = new Ammo.btDefaultSoftBodySolver();
+			this.physicsWorld = new Ammo.btSoftRigidDynamicsWorld( this.dispatcher, this.broadphase, this.solver, this.collisionConfiguration, this.solfBodySolver );
+		}
+		else
+		{
+			this.physicsWorld = new Ammo.btDiscreteDynamicsWorld( this.dispatcher, this.broadphase, this.solver, this.collisionConfiguration );
+		}
+		this.physicsWorld.setGravity( new Ammo.btVector3( 0, this.gravityConstant, 0 ) );
+
+		if(this.isSoftBodyWorld)
+		{
+			this.physicsWorld.getWorldInfo().set_m_gravity( new Ammo.btVector3( 0, this.gravityConstant, 0 ) );
+			this.softBodyHelpers = new Ammo.btSoftBodyHelpers();
+		}
 
 		this.transformAux1 = new Ammo.btTransform();
 		this.transformAux2 = new Ammo.btTransform();
 		this.tempBtVec3_1 = new Ammo.btVector3( 0, 0, 0 );
 
-		this.pos = new THREE.Vector3();
-		this.quat = new THREE.Quaternion();
-		this.testMaterial = new THREE.MeshPhongMaterial( { color: 0x787878 } );
-
 		this.collisions = {};
     	this.frameCollisions = {};
 
 		this.inited = true;
-	}
-
-	processGeometry(bufGeometry)
-	{
-		// Obtain a Geometry
-		let geo = new THREE.Geometry().fromBufferGeometry(bufGeometry);
-
-		// Checks for duplicate vertices using hashmap.
-		// Duplicated vertices are removed and faces' vertices are updated.
-		let vertsDiff = geo.mergeVertices();
-
-		// Convert back to BufferGeometry
-		let indexedBufGeometry = this.createIndexedBufferGeometryFromGeometry(geo);
-
-		// Create index arrays mapping the indexed vertices to bufGeometry vertices
-        this.mapIndices( bufGeometry, indexedBufGeometry );
 	}
 
 	createShapeFromBuffergeometryMesh(mesh)
@@ -214,6 +219,10 @@ export default class Physics
 			// Disable deactivation
 			body.setActivationState(4);
 		}
+		else
+		{
+			this.staticColliders.push(refMesh);
+		}
 
 		this.physicsWorld.addRigidBody(body);
 
@@ -235,6 +244,7 @@ export default class Physics
 			Ammo.destroy(refMesh.userData.motionState);
 			refMesh.userData.motionState = null;
 
+			// remove mesh from array
 			this.rigidBodies = this.rigidBodies.filter(item => item !== refMesh);
 		}		
 	}
@@ -301,7 +311,47 @@ export default class Physics
 		// step world
 		this.physicsWorld.stepSimulation(dt, 10);
 
-		// update graphics
+		// update soft volumes
+		for(let i=0; i<this.softBodies.length; i++)
+		{
+			let volume = this.softBodies[i];
+			let geometry = volume.geometry;
+			let softBody = volume.userData.physicsBody;
+			let volumePositions = geometry.attributes.position.array;
+			let volumeNormals = geometry.attributes.normal.array;
+			let association = geometry.ammoIndexAssociation;
+			let numVerts = association.length;
+			let nodes = softBody.get_m_nodes();
+			for ( let j = 0; j < numVerts; j ++ ) {
+				let node = nodes.at( j );
+				let nodePos = node.get_m_x();
+				let x = nodePos.x();
+				let y = nodePos.y();
+				let z = nodePos.z();
+				let nodeNormal = node.get_m_n();
+				let nx = nodeNormal.x();
+				let ny = nodeNormal.y();
+				let nz = nodeNormal.z();
+				let assocVertex = association[ j ];
+
+				for (let k=0; k<assocVertex.length; k++)
+				{
+					let indexVertex = assocVertex[ k ];
+					volumePositions[ indexVertex ] = x;
+					volumeNormals[ indexVertex ] = nx;
+					indexVertex ++;
+					volumePositions[ indexVertex ] = y;
+					volumeNormals[ indexVertex ] = ny;
+					indexVertex ++;
+					volumePositions[ indexVertex ] = z;
+					volumeNormals[ indexVertex ] = nz;
+				}
+			}
+			geometry.attributes.position.needsUpdate = true;
+			geometry.attributes.normal.needsUpdate = true;
+		}
+
+		// update rigidbody graphics
 		for(let i=0; i<this.rigidBodies.length; i++)
 		{
 			let objThree = this.rigidBodies[i];
@@ -319,6 +369,7 @@ export default class Physics
 
 		// Check for collisions and fire callbacks
 		// Ref: https://github.com/playcanvas/engine/blob/d27a44b6d732c0f1bab94ef5126050db16a1d914/src/framework/components/rigid-body/system.js#L485
+		/*
 		let dispatcher = this.physicsWorld.getDispatcher();
 		let numManifolds = dispatcher.getNumManifolds();
 		this.frameCollisions = {};
@@ -328,7 +379,7 @@ export default class Physics
 			let manifold = dispatcher.getManifoldByIndexInternal(i);
 			let body0 = manifold.getBody0();	// btCollisionObject
 			let body1 = manifold.getBody1();
-			let wb0 = Ammo.castObject(body0, Ammo.btRigidBody);	// btRigidbody
+			let wb0 = Ammo.castObject(body0, Ammo.btRigidBody);	// btRigidBody
 			let wb1 = Ammo.castObject(body1, Ammo.btRigidBody);
 			let e0 = wb0.entity;
 			let e1 = wb1.entity;
@@ -352,8 +403,6 @@ export default class Physics
 
             	e0Events = e0.collision? e0.collision.hasEvent("collisionstart")  || e0.collision.hasEvent("collisionend") || e0.collision.hasEvent("contact") : false;
             	e1Events = e1.collision? e1.collision.hasEvent("collisionstart")  || e1.collision.hasEvent("collisionend") || e1.collision.hasEvent("contact") : false;
-
-            	// console.log(e0);
 
             	// TODO: globalEvents
             	if (e0Events || e1Events)
@@ -392,14 +441,71 @@ export default class Physics
             			}
             		}
             	}
-            	//console.log(wb0);
             }
 		}
-
 		this.cleanOldCollisions();
-
-
+		*/
 	}
+
+	createNewWorld(softBodyWorld)
+	{
+		if(this.physicsWorld!=null)
+		{
+			// Bullet way, but not all functions are converted...
+			let numCollisionObjects = this.physicsWorld.getCollisionObjectArray().length;
+			// Destroy old world's objects
+			for(let i=numCollisionObjects-1; i>=0; i--)
+			{
+				let _collision = this.physicsWorld.getCollisionObjectArray()[i];
+				let _rigidBody = Ammo.btRigidBody.upcast(_collision);
+				if (_rigidBody)
+				{
+					this.removeConstraint(_rigidBody);
+					if(_rigidBody.getMotionState())
+					{
+						_rigidBody.entity.userData.motionState = null;
+						Ammo.destroy(_rigidBody.getMotionState());
+					}					
+					_rigidBody.entity.userData.physicsBody = null;
+
+					// remove its Mesh from array
+					this.rigidBodies = this.rigidBodies.filter(item => item !== _rigidBody.entity);
+				}
+				this.physicsWorld.removeCollisionObject(_collision);
+				Ammo.destroy(_collision);
+			}
+
+			// Clean old world
+			Ammo.destroy(this.physicsWorld);
+			this.physicsWorld = null;
+		    Ammo.destroy(this.solver);
+		    this.solver = null;
+		    Ammo.destroy(this.broadphase);
+		    this.broadphase = null;
+		    Ammo.destroy(this.dispatcher);
+		    this.dispatcher = null;
+		    Ammo.destroy(this.collisionConfiguration);
+		    this.collisionConfiguration = null;
+
+		    Ammo.destroy(this.transformAux1);
+		    this.transformAux1 = null;
+		    Ammo.destroy(this.transformAux2);
+			this.transformAux2 = null;
+			Ammo.destroy(this.tempBtVec3_1);
+			this.tempBtVec3_1 = null;
+
+		    this.inited = false;
+
+			console.log("after CLEAN_UP, this.rigidBodies.lenght: " + this.rigidBodies.lenght);
+
+			// Init new world
+			this.init();
+		}
+	}
+
+	/////////////////
+	//  Collision  //
+	/////////////////
 
 	/**
 	 * @description Stores a collision between the entity and other in the contacts map and returns true if it is a new collision
@@ -478,47 +584,97 @@ export default class Physics
 	}
 
 	/////////////////
+	//  SoftBody  ///
 	/////////////////
-	/////////////////
+	// ref: https://github.com/mrdoob/three.js/blob/master/examples/webgl_physics_volume.html
+	processGeometryForSoftVolume(bufGeometry)
+	{
+		// only consider the position when merging vertices
+		let posOnlyBufGeometry = new THREE.BufferGeometry();
+		posOnlyBufGeometry.addAttribute( 'position', bufGeometry.getAttribute( 'position' ) );
+		posOnlyBufGeometry.setIndex( bufGeometry.getIndex() );
 
-	createIndexedBufferGeometryFromGeometry( geometry ) {
+		// Merge the vertices so the triangle soup is converted to indexed triangles
+		let indexedBufferGeom = THREE.BufferGeometryUtils.mergeVertices( posOnlyBufGeometry );
+		// Create index arrays mapping the indexed vertices to bufGeometry vertices
+		this.mapIndices( bufGeometry, indexedBufferGeom );
+	}
 
-        var numVertices = geometry.vertices.length;
-        var numFaces = geometry.faces.length;
+	createSoftVolume(refMesh, bufferGeom, mass, pressure)
+	{
+		let softBody = this.softBodyHelpers.CreateFromTriMesh(
+			this.physicsWorld.getWorldInfo(),
+			bufferGeom.ammoVertices,
+			bufferGeom.ammoIndices,
+			bufferGeom.ammoIndices.length/3,
+			true);
 
-        var bufferGeom = new THREE.BufferGeometry();
-        var vertices = new Float32Array( numVertices * 3 );
-        var indices = new ( numFaces * 3 > 65535 ? Uint32Array : Uint16Array )( numFaces * 3 );
+		let sbConfig = softBody.get_m_cfg();
+		sbConfig.set_viterations(40);
+		sbConfig.set_piterations(40);
 
-        for ( var i = 0; i < numVertices; i++ ) {
+		// Soft-soft and soft-rigid collisions
+		sbConfig.set_collisions(0x11);
 
-            var p = geometry.vertices[ i ];
+		// Friction
+		sbConfig.set_kDF( 0.1 );
+		// Damping
+		sbConfig.set_kDP( 0.01 );
+		// Pressure
+		sbConfig.set_kPR( pressure );
+		// Stiffness
+		softBody.get_m_materials().at( 0 ).set_m_kLST( 0.9 );
+		softBody.get_m_materials().at( 0 ).set_m_kAST( 0.9 );
 
-            var i3 = i * 3;
+		softBody.setTotalMass(mass, false);
+		Ammo.castObject(softBody, Ammo.btCollisionObject).getCollisionShape().setMargin(this.margin);
+		this.physicsWorld.addSoftBody(softBody, 1, -1);
 
-            vertices[ i3 ] = p.x;
-            vertices[ i3 + 1 ] = p.y;
-            vertices[ i3 + 2 ] = p.z;
+		refMesh.userData.physicsBody = softBody;
+		// Disable deactivation
+		softBody.setActivationState(4);
 
-        }
+		softBody.entity = refMesh;
+		this.softBodies.push(refMesh);
+	}
 
-        for ( var i = 0; i < numFaces; i++ ) {
+	// createIndexedBufferGeometryFromGeometry( geometry ) {
 
-            var f = geometry.faces[ i ];
+ //        var numVertices = geometry.vertices.length;
+ //        var numFaces = geometry.faces.length;
 
-            var i3 = i * 3;
+ //        var bufferGeom = new THREE.BufferGeometry();
+ //        var vertices = new Float32Array( numVertices * 3 );
+ //        var indices = new ( numFaces * 3 > 65535 ? Uint32Array : Uint16Array )( numFaces * 3 );
 
-            indices[ i3 ] = f.a;
-            indices[ i3 + 1 ] = f.b;
-            indices[ i3 + 2 ] = f.c;
+ //        for ( var i = 0; i < numVertices; i++ ) {
 
-        }
+ //            var p = geometry.vertices[ i ];
 
-        bufferGeom.setIndex( new THREE.BufferAttribute( indices, 1 ) );
-        bufferGeom.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+ //            var i3 = i * 3;
 
-        return bufferGeom;
-    }
+ //            vertices[ i3 ] = p.x;
+ //            vertices[ i3 + 1 ] = p.y;
+ //            vertices[ i3 + 2 ] = p.z;
+ //        }
+
+ //        for ( var i = 0; i < numFaces; i++ ) {
+
+ //            var f = geometry.faces[ i ];
+
+ //            var i3 = i * 3;
+
+ //            indices[ i3 ] = f.a;
+ //            indices[ i3 + 1 ] = f.b;
+ //            indices[ i3 + 2 ] = f.c;
+
+ //        }
+
+ //        bufferGeom.setIndex( new THREE.BufferAttribute( indices, 1 ) );
+ //        bufferGeom.addAttribute( 'position', new THREE.BufferAttribute( vertices, 3 ) );
+
+ //        return bufferGeom;
+ //    }
 
     isEqual( x1, y1, z1, x2, y2, z2 ) {
         var delta = 0.000001;
@@ -532,32 +688,25 @@ export default class Physics
         // Creates ammoVertices, ammoIndices and ammoIndexAssociation in bufGeometry
 
         var vertices = bufGeometry.attributes.position.array;
-        var idxVertices = indexedBufferGeom.attributes.position.array;
-        var indices = indexedBufferGeom.index.array;
-
-        var numIdxVertices = idxVertices.length / 3;
-        var numVertices = vertices.length / 3;
-
-        bufGeometry.ammoVertices = idxVertices;
-        bufGeometry.ammoIndices = indices;
-        bufGeometry.ammoIndexAssociation = [];
-
-        for ( var i = 0; i < numIdxVertices; i++ ) {
-
-            var association = [];
-            bufGeometry.ammoIndexAssociation.push( association );
-
-            var i3 = i * 3;
-
-            for ( var j = 0; j < numVertices; j++ ) {
-                var j3 = j * 3;
-                if ( this.isEqual( idxVertices[ i3 ], idxVertices[ i3 + 1 ],  idxVertices[ i3 + 2 ],
-                              vertices[ j3 ], vertices[ j3 + 1 ], vertices[ j3 + 2 ] ) ) {
-                    association.push( j3 );
-                }
-            }
-
-        }
+		var idxVertices = indexedBufferGeom.attributes.position.array;
+		var indices = indexedBufferGeom.index.array;		
+		var numIdxVertices = idxVertices.length / 3;
+		var numVertices = vertices.length / 3;
+		bufGeometry.ammoVertices = idxVertices;
+		bufGeometry.ammoIndices = indices;
+		bufGeometry.ammoIndexAssociation = [];
+		for ( var i = 0; i < numIdxVertices; i ++ ) {
+			var association = [];
+			bufGeometry.ammoIndexAssociation.push( association );
+			var i3 = i * 3;
+			for ( var j = 0; j < numVertices; j ++ ) {
+				var j3 = j * 3;
+				if ( this.isEqual( idxVertices[ i3 ], idxVertices[ i3 + 1 ], idxVertices[ i3 + 2 ],
+					vertices[ j3 ], vertices[ j3 + 1 ], vertices[ j3 + 2 ] ) ) {
+					association.push( j3 );
+				}
+			}
+		}
     }
 
     torqueImpulse(body)
