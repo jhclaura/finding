@@ -7,16 +7,18 @@ import LazyChapter from "./chapters/lazy.js"
 
 export default class ChapterManager
 {
-	constructor(scene, ammo, modelLoader, creatureCreator, cha)
+	constructor(scene, cameraController, ammo, modelLoader, creatureCreator, cha)
 	{
 		this.chapterNames = ["lazy", "lost", "same", "like", "confident", "jealous"];
 		this.scene = scene;
+		this.cameraController = cameraController;
 		this.ammo = ammo;
 		this.modelLoader = modelLoader;
 		this.creatureCreator = creatureCreator;
 		this.cha = cha;
 
 		this.currentChapter;
+		this.controlsCamera = false;
 		this.triggers = {};
 
 		this.setup();
@@ -40,7 +42,7 @@ export default class ChapterManager
 
 		eventBus.on("ChaCollideTrigger", (trigger)=>{
 			console.log("Cha hits " + trigger);
-			if (trigger=="lazy")
+			if (trigger=="lazy" || trigger=="same")
 				this.start(trigger);
 			else
 				return;
@@ -60,7 +62,7 @@ export default class ChapterManager
 		switch(chapter)
 		{
 			case "lazy":
-			this.currentChapter = new LazyChapter(this.ammo, this.modelLoader, this.creatureCreator, this.cha);
+			this.currentChapter = new LazyChapter(this.ammo, this.modelLoader, this.creatureCreator, this.cha, this);
 			break;
 
 			case "lost":

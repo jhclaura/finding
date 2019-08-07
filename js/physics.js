@@ -120,24 +120,41 @@ export default class Physics
 		return newShape;
 	}
 
-	throwBall(raycaster)
+	throwBall(raycaster, fromSceen = false)
 	{
-		let ballMass = 20;
-		let ballRadius = 0.4;
+		console.log('!');
+
+		let ballMass = 3;
+		let ballRadius = 4;
 		let ball = new THREE.Mesh(new THREE.SphereBufferGeometry(ballRadius,14,10), this.testMaterial);
-		ball.castShadow = true;
-		ball.receiveShadow = true;
+		// ball.castShadow = true;
+		// ball.receiveShadow = true;
 
 		let ballShape = new Ammo.btSphereShape(ballRadius);
 		ballShape.setMargin(this.margin);
-		// this.pos.copy(raycaster.ray.direction);
-		// this.pos.add(raycaster.ray.origin);
-		this.pos.set(2,10,0);
+		if (fromSceen)
+		{
+			this.pos.copy(raycaster.ray.direction);
+			this.pos.add(raycaster.ray.origin);
+		}
+		else
+		{
+			this.pos.set(2,10,0);
+		}
 		this.quat.set(0,0,0,1);
+		
 		let ballBody = this.createRigidBody(ball, ballShape, ballMass, this.pos, this.quat);
-		// this.pos.copy(raycaster.ray.direction);
-		// this.pos.multiplyScalar(54);
-		this.pos.set(0,-10,2);
+		ballBody.setFriction( 0.5 );
+		if (fromSceen)
+		{
+			this.pos.copy(raycaster.ray.direction);
+			this.pos.multiplyScalar(100);
+		}
+		else
+		{
+			this.pos.set(0,-10,2);
+		}
+
 		ballBody.setLinearVelocity(new Ammo.btVector3(this.pos.x, this.pos.y, this.pos.z));
 
 		return ball;
@@ -600,7 +617,7 @@ export default class Physics
 		this.mapIndices( bufGeometry, indexedBufferGeom );
 	}
 
-	createSoftVolume(refMesh, bufferGeom, mass, pressure)
+	createSoftVolume(refMesh, bufferGeom, mass, pressure, stiffness=0.9)
 	{
 		let softBody = this.softBodyHelpers.CreateFromTriMesh(
 			this.physicsWorld.getWorldInfo(),
@@ -623,8 +640,8 @@ export default class Physics
 		// Pressure
 		sbConfig.set_kPR( pressure );
 		// Stiffness
-		softBody.get_m_materials().at( 0 ).set_m_kLST( 0.9 );
-		softBody.get_m_materials().at( 0 ).set_m_kAST( 0.9 );
+		softBody.get_m_materials().at( 0 ).set_m_kLST( stiffness );
+		softBody.get_m_materials().at( 0 ).set_m_kAST( stiffness );
 
 		softBody.setTotalMass(mass, false);
 		Ammo.castObject(softBody, Ammo.btCollisionObject).getCollisionShape().setMargin(this.margin);

@@ -430,7 +430,7 @@ export default class Cha extends THREE.Object3D {
 		let intersect = this.collisionRaycaster.intersectObjects(this.scene.children);
 		if (intersect.length>0)
 		{
-			//console.log("Cha hits " + intersect[0].object);
+			// console.log("Cha hits " + intersect[0].object);
 			let intersectObject = intersect[0].object;
 			if (intersectObject.tag == "trigger")
 			{

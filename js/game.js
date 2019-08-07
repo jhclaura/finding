@@ -6,6 +6,7 @@ import Physics from "./physics.js"
 import Util from "./util.js"
 import CreatureCreator from "./creatureCreator.js"
 import ChapterManager from "./chapterManager.js"
+import CameraController from "./cameraController.js"
 
 export default class Game {
 	constructor() {
@@ -65,6 +66,10 @@ export default class Game {
 			this.scene.add(this.camera);
 		}
 
+		this.cameraController = new CameraController(this.camera, this.cameraFrustumSize, this.camToChaHeight, this.camToChaDistance);
+		this.cameraController.setPosition(0, this.camToChaHeight, this.camToChaDistance);
+		this.cameraController.lookAt(0,0,0);
+
 		this.renderer = new THREE.WebGLRenderer( {antialias: true} );
 		this.renderer.setPixelRatio( window.devicePixelRatio );
 		this.renderer.setSize( window.innerWidth, window.innerHeight );
@@ -75,9 +80,6 @@ export default class Game {
 			this.renderer.autoClear = false;
 			this.renderer.autoClearColor = false;
 		}
-
-		this.camera.position.set( 0, this.camToChaHeight, this.camToChaDistance );	//0,13,30
-		this.camera.lookAt( 0,0,0 );
 
 		this.raycaster = new THREE.Raycaster();
 		this.mouse = new THREE.Vector2();
@@ -141,13 +143,11 @@ export default class Game {
 
 		this.creatureCreator = new CreatureCreator(this.ammo);
 
-		this.chapterManager = new ChapterManager(this.scene, this.ammo, this.modelLoader, this.creatureCreator, this.Cha);
+		this.chapterManager = new ChapterManager(this.scene, this.cameraController, this.ammo, this.modelLoader, this.creatureCreator, this.Cha);
 		
 		// DAT.GUI
 		this.panel = panel;
 		this.setupCameraPanel();
-
-		
 
 		// var dir = new THREE.Vector3( 1,0,0 );
 		// this.arrowHelper = new THREE.ArrowHelper(dir, this.camera.position, 10, 0xff0000);
@@ -194,49 +194,20 @@ export default class Game {
 			"position x": this.camera.position.x,
 			"position y": this.camera.position.y,
 			"position z": this.camera.position.z,
+			"frustum size": this.cameraFrustumSize
 		};
-		folder.add(this.cameraPanelSettings, "position x", -50.0, 50.0, 0.1).onChange((position)=>{
-			this.setCameraPosition("x", position);
+		folder.add(this.cameraPanelSettings, "position x", -500.0, 500.0, 0.1).onChange((position)=>{
+			this.cameraController.setAxisPosition("x", position);
 		});
-		folder.add(this.cameraPanelSettings, "position y", -50.0, 50.0, 0.1).onChange((position)=>{
-			this.setCameraPosition("y", position);
+		folder.add(this.cameraPanelSettings, "position y", -500.0, 500.0, 0.1).onChange((position)=>{
+			this.cameraController.setAxisPosition("y", position);
 		});
-		folder.add(this.cameraPanelSettings, "position z", -50.0, 50.0, 0.1).onChange((position)=>{
-			this.setCameraPosition("z", position);
+		folder.add(this.cameraPanelSettings, "position z", -500.0, 500.0, 0.1).onChange((position)=>{
+			this.cameraController.setAxisPosition("z", position);
 		});
-	}
-
-	setCameraPosition(axis, position)
-	{
-		switch(axis)
-		{
-			case "x":
-			this.camera.position.x = position;
-			// this.camera.lookAt( 0,0,0 );
-			this.camera.updateProjectionMatrix();
-			break;
-			case "y":
-			this.camera.position.y = position;
-			// this.camera.lookAt( 0,0,0 );
-			this.camera.updateProjectionMatrix();
-			break;
-			case "z":
-			this.camera.position.z = position;
-			// this.camera.lookAt( 0,0,0 );
-			this.camera.updateProjectionMatrix();
-			break;
-		}
-		//this.cameraOrthoHelper.update();
-	}
-
-	cameraFollow(delta)
-	{
-		let target = new THREE.Vector3();
-		target = this.camera.target.getRootWorldPosition(target);
-		if (target == null) return;
-		target.y += this.camToChaHeight;
-		target.z += this.camToChaDistance;
-		this.camera.position.lerp(target, delta*1);
+		folder.add(this.cameraPanelSettings, "frustum size", 0, 200, 1).onChange((size)=>{
+			this.cameraController.setFrustumSize(size);
+		});
 	}
 
 	animate(delta)
@@ -245,7 +216,8 @@ export default class Game {
 		this.Cha.update(delta);
 		this.moveMousePosition = this.Cha.updateHeadLookAt(this.raycaster);
 		//this.creatureCreator.follow(this.Cha.rootWorldPosition);
-		this.cameraFollow(delta);
+		if (!this.chapterManager.controlsCamera)
+			this.cameraController.follow(delta);
 		this.chapterManager.update(delta);
 
 		if (this.arrow.beGrabbed)
@@ -320,11 +292,7 @@ export default class Game {
 
 		let ratio = 1;
 		if(this.debugMode) ratio = 0.5;
-		this.camera.left = - ratio * this.cameraFrustumSize * aspect / 2;
-		this.camera.right = ratio * this.cameraFrustumSize * aspect / 2;
-		this.camera.top = this.cameraFrustumSize / 2;
-		this.camera.bottom = - this.cameraFrustumSize / 2;
-		this.camera.updateProjectionMatrix();
+		this.cameraController.onScreenUpdate(this.screenWidth, this.screenHeight, ratio);
 
 		//Cha
 		this.Cha.onWindowResize();
@@ -401,6 +369,8 @@ export default class Game {
 		// --------TEST---------
 		// let newCreature = this.creatureCreator.create();
 		// this.scene.add(newCreature);
+
+		// this.scene.add(this.ammo.throwBall(this.raycaster, true));
 	}
 
 	onMouseMove(event)

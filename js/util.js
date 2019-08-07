@@ -71,4 +71,17 @@ export default class Util {
 	{
 		return Math.random() * (max-min) + min;
 	}
+
+	loadShader(vert_url, frag_url, onLoad, onProgress, onError)
+	{
+		let vert_loader = new THREE.FileLoader();
+		vert_loader.setResponseType('text');
+		vert_loader.load(vert_url, (vert_text)=>{
+			let frag_loader = new THREE.FileLoader();
+			frag_loader.setResponseType('text');
+			frag_loader.load(frag_url, (frag_text)=>{
+				onLoad(vert_text, frag_text);
+			});
+		}, onProgress, onError);
+	}
 }

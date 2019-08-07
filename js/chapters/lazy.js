@@ -1,12 +1,16 @@
+import LazyDude from '../lazyDude.js'
 export default class LazyChapter extends THREE.Object3D
 {
-	constructor(ammo, modelLoader, creatureCreator, cha)
+	constructor(ammo, modelLoader, creatureCreator, cha, chapterManager)
 	{
 		super();
 		this.ammo = ammo;
 		this.modelLoader = modelLoader;
 		this.creatureCreator = creatureCreator;
 		this.cha = cha;
+		this.chapterManager = chapterManager;
+		this.scene = chapterManager.scene;
+		this.cameraController = chapterManager.cameraController;
 
 		this.tmpVector3 = new THREE.Vector3();
 		this.tmpQuaternion = new THREE.Quaternion();
@@ -23,17 +27,57 @@ export default class LazyChapter extends THREE.Object3D
 		this.hasCrumbBeGrabbed = false;
 		this.currentGrabbedCrumb;
 
+		this.inSceneB = false;
+
 		// Events
 		eventBus.on("ChapterEnds", ()=>{		
 			this.end();
 		});
 		eventBus.on("ChaStartWalking", ()=>{
-			TweenMax.killTweensOf(this, {crumbHeightFactor: true,});	//The values assigned to each property don’t matter
+			TweenMax.killTweensOf(this, {crumbHeightFactor: true});	//The values assigned to each property don’t matter
 			TweenMax.to(this, 1.5, {crumbHeightFactor: 1});
 		});
 		eventBus.on("ChaStopWalking", ()=>{
 			TweenMax.killTweensOf(this, {finalCrumbHeight: true});	//The values assigned to each property don’t matter
 			TweenMax.to(this, 0.5, {crumbHeightFactor: 0});
+		});
+		eventBus.on("ChaCollideTrigger", (trigger)=>{
+			if (trigger=="sceneB")
+			{
+				if (this.inSceneB)
+				{
+					// back to scene A
+					console.log("back to scene A");
+					
+					let followPosition = this.cameraController.getFollowPosition();
+					TweenMax.to(this.cameraController, 2, {
+						setX: followPosition.x, setY: followPosition.y, setZ: followPosition.z, currentFrustumSize: this.cameraController.defaultFrustumSize, onUpdate: ()=>{
+							this.cameraController.setFrustumSize(this.cameraController.currentFrustumSize);
+						}, onComplete:()=>{
+							this.chapterManager.controlsCamera = false;
+						}
+					});
+
+					this.inSceneB = false;
+				}
+				else
+				{
+					// to scene B
+					console.log("to scene B");
+					this.chapterManager.controlsCamera = true;
+
+					// Move camera to fixed position
+					let followPosition = this.cameraController.getFollowPosition();
+					TweenMax.to(this.cameraController, 2, {
+						setX: followPosition.x - 87, setY: 100, setZ: 90, currentFrustumSize: 150, onUpdate: ()=>{
+							this.cameraController.setFrustumSize(this.cameraController.currentFrustumSize);
+						}, onComplete:()=>{
+							console.log(this.cameraController.camera.position);
+						}
+					});
+					this.inSceneB = true;
+				}
+			}
 		});
 
 		this.setup();
@@ -47,6 +91,15 @@ export default class LazyChapter extends THREE.Object3D
 		{
 			this.materials.push( new THREE.MeshLambertMaterial({color: this.colors[i]}) );
 		}
+
+		// Scene B Trigger
+		this.boxGeo = new THREE.BoxBufferGeometry(1,1,1);
+		this.SceneBTrigger = new THREE.Mesh(this.boxGeo, this.materials[0]);
+		this.SceneBTrigger.tag = "trigger";
+		this.SceneBTrigger.name = "sceneB";
+		this.SceneBTrigger.scale.set(4, 10, 100);
+		this.SceneBTrigger.position.set(-140, 0, 30);
+		this.scene.add(this.SceneBTrigger);
 
 		// Create crumbs
 		this.crumbGeometry = new THREE.TorusBufferGeometry(0.8, 0.4, 8, 10);
@@ -98,37 +151,94 @@ export default class LazyChapter extends THREE.Object3D
 		// 	console.log(this.crumbs[i]);
 		// }
 
-		// Create soft volumes
-		this.softBellyGeometry = new THREE.SphereBufferGeometry( 1.5, 40, 25 );
-		this.softBellyGeometry.translate( -10, 10, 0 );
-		this.ammo.processGeometryForSoftVolume(this.softBellyGeometry);
+		userUtil.loadShader("js/shaders/lavaVertex.vert", "js/shaders/lavaFragment.frag", (vert_text, frag_text)=>{this.onShaderLoaded(vert_text, frag_text);});
 
-		this.softBelly = new THREE.Mesh( this.softBellyGeometry, new THREE.MeshLambertMaterial( { color: 0xff917b } ) );
-		// this.softBelly.frustumCulled = false;
-		this.add( this.softBelly );
+		// ------- Lazy Dude -------
+		this.lazyDude = new LazyDude(this.ammo, this.modelLoader, "./assets/models/lazyDude.glb", 'lazyDude', ()=>{			
+			// console.log(this.lazyDude.belly);
+		});
+		this.add(this.lazyDude);
+		// this.modelLoader.load("./assets/models/lazyDude.glb", (gltf)=>{this.onLoadModel(gltf);});
 
-		this.ammo.createSoftVolume( this.softBelly, this.softBellyGeometry, 15, 250 );
+	}
 
+	onShaderLoaded(vert_text, frag_text)
+	{
+		this.bellyMaterial = new THREE.ShaderMaterial({
+			uniforms: {
+				time: {
+					type: 'f',
+					value: 0.0
+				}
+			},
+			vertexShader: vert_text,
+			fragmentShader: frag_text
+		});
 
-		// Lazy dude
-		this.modelLoader.load("./assets/models/oneCube.glb", (gltf)=>{this.onLoadModel(gltf);});
+		this.lazyDude.belly.material = this.bellyMaterial;
+
+		// let testMesh = new THREE.Mesh(new THREE.IcosahedronGeometry(20,4), this.bellyMaterial);
+		// this.add(testMesh);
 	}
 
 	onLoadModel(gltf)
-	{
-		console.log(gltf.scene);
-		this.lazyDudeModel = gltf.scene.children[0];
-		// this.lazyDudeModel.children[0].scale.multiplyScalar(100);
-		this.add(gltf.scene.children[0]);	// RootNode
+	{		
+		this.lazyDude = gltf.scene.children[0];
+		console.log(this.lazyDude);
+		this.lazyDude.rotation.x = -90 * Math.PI/180;
+		this.lazyDude.rotation.z = 45 * Math.PI/180;
+		this.lazyDude.position.y = 10;
+		this.lazyDude.matrixWorldNeedsUpdate = true;
 
-		let compareCube = new THREE.Mesh(new THREE.BoxBufferGeometry(1,1,1), new THREE.MeshLambertMaterial( { color: 0xff917b } ));
-		compareCube.position.x = 5;
-		this.add(compareCube);
+		this.LD_animations = gltf.animations;
+
+		this.add(this.lazyDude);	// RootNode
+
+		this.lazyFace = this.lazyDude.getObjectByName( 'Head' );
+		// console.log(this.lazyFace);
+		let expressions = Object.keys( this.lazyFace.morphTargetDictionary );
+		for (let i=0; i<expressions.length; i++)
+		{
+			console.log(expressions[i]);
+		}
+
+		this.lazyDude.updateMatrixWorld();
+
+		let dummyBody = this.lazyDude.getObjectByName( 'dummyBody' );
+		dummyBody.visible = false;
+		this.bodyJoint = this.lazyDude.getObjectByName( 'BodyJoint' );
+		let bodyPosition = new THREE.Vector3();
+		this.bodyJoint.getWorldPosition(bodyPosition);
+		console.log(bodyPosition);
+
+		// Create soft volumes
+		this.softBellyGeometry = new THREE.SphereBufferGeometry( 1.5, 40, 25 );
+		this.softBellyGeometry.translate( bodyPosition.x, bodyPosition.y, bodyPosition.z );
+		this.ammo.processGeometryForSoftVolume(this.softBellyGeometry);
+		this.softBelly = new THREE.Mesh( this.softBellyGeometry, new THREE.MeshLambertMaterial( { color: 0xff917b } ) );
+		// this.softBelly.frustumCulled = false;
+		this.add( this.softBelly );
+		this.ammo.createSoftVolume( this.softBelly, this.softBellyGeometry, 15, 250 );
+
+		this.LD_animationMixer = new THREE.AnimationMixer(this.lazyDude);
+		this.LD_actionDictionary = {};
+		for(let i=0; i<this.LD_animations.length; i++)
+		{
+			this.LD_actionDictionary[this.LD_animations[i].name] = this.LD_animationMixer.clipAction(this.LD_animations[i].optimize());//this.animations[i].optimize()
+		}
+		// this.LD_actionDictionary.clap.loop = THREE.LoopOnce;
+		// this.LD_actionDictionary.clap.clampWhenFinished = true;
+		this.activateAllActions("idle");
+		this.LD_currentAction = 'idle';
+
+		this.LD_animationMixer.addEventListener( "loop", (e)=>{this.onAniLoopFinished(e);} );
+		this.LD_animationMixer.addEventListener( "finished", (e)=>{this.onAniFinished(e);} );
 	}
 
 	update(delta)
 	{
 		this.time += delta;
+		this.lazyDude.update(delta);
 
 		if(this.crumbs.length>0)
 		{
@@ -155,6 +265,9 @@ export default class LazyChapter extends THREE.Object3D
 			target.add(this.currentGrabbedCrumb.grabOffset);
 			this.currentGrabbedCrumb.position.copy(target);
 		}
+
+		if (this.bellyMaterial)
+			this.bellyMaterial.uniforms['time'].value = this.time * 0.01;
 	}
 
 	end()
