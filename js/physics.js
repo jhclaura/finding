@@ -4,7 +4,7 @@ export default class Physics
 {
 	constructor()
 	{
-		this.gravityConstant = -10;
+		this.gravityConstant = -30;
 		this.margin = 0.05;
 		this.inited = false;
 		this.isSoftBodyWorld = true;
@@ -589,13 +589,13 @@ export default class Physics
 		}
 	}
 
-	applyForceToAll(impulse)
-	{
-		this.tempBtVec3_1.setValue(0,100,0);
+	applyForceToAll(force)
+	{		
 		for(let i=0; i<this.rigidBodies.length; i++)
 		{
 			let objThree = this.rigidBodies[i];
 			let objPhys = objThree.userData.physicsBody;
+			this.tempBtVec3_1.setValue(0,force+userUtil.getRandomFloat(-10,10),0);
 			objPhys.applyCentralImpulse (this.tempBtVec3_1);
 		}
 	}

@@ -116,4 +116,18 @@ export default class CameraController {
 	{
 
 	}
+
+	shake(amount)
+	{
+		this.intensity = 1;
+		this.preShakePosition = this.camera.position.clone();
+		TweenMax.to(this, 2, {intensity: 0, onUpdate: ()=>{
+			let val = userUtil.getRandomFloat(-1*amount, amount) * this.intensity;
+			// this.camera.position.x += val;
+			this.camera.position.y = this.preShakePosition.y + val;
+			// this.camera.position.z += val;
+		}, onComplete: ()=>{
+			this.camera.position.copy(this.preShakePosition);
+		}});
+	}
 }

@@ -21,6 +21,7 @@ export default class Character extends THREE.Object3D {
 		this.model = gltf.scene.children[0];
 		this.animations = gltf.animations;
 		console.log(this.model);
+		console.log(this.animations);
 		this.add(this.model);
 		let tag = this.tag;
 		this.model.traverse (function (mesh) {
@@ -37,8 +38,8 @@ export default class Character extends THREE.Object3D {
 			// this.actionDictionary[this.animations[i].name] = this.animationMixer.clipAction(this.animations[i].optimize());
 		}
 
-		this.activateAllActions("Idle");
-		this.currentAction = 'Idle';
+		this.activateAllActions("idle");
+		this.currentAction = 'idle';
 
 		this.animationMixer.addEventListener( "loop", (e)=>{this.onAniLoopFinished(e);} );
 		this.animationMixer.addEventListener( "finished", (e)=>{this.onAniFinished(e);} );
@@ -72,7 +73,14 @@ export default class Character extends THREE.Object3D {
 			else
 				this.setActionWeight(this.actionDictionary[key], 0);
 			this.actionDictionary[key].play();
-			console.log(key);
+		}
+	}
+
+	deactivateAllActions()
+	{
+		for (let key in this.actionDictionary)
+		{
+			this.setActionWeight(this.actionDictionary[key], 0);
 		}
 	}
 

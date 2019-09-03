@@ -113,4 +113,21 @@ export default class ChapterManager
 			this.triggersArray[i].visible = true;
 		}
 	}
+
+	throw()
+	{
+		if(this.currentChapter.chapterName == "lazy")
+		{
+			this.currentChapter.throwCrumb();
+			this.currentChapter.dropCandy();
+		}
+	}
+
+	volleyball()
+	{
+		if(this.currentChapter.chapterName == "lazy")
+		{
+			this.currentChapter.convertAllCrumbsToBalls();
+		}
+	}
 }

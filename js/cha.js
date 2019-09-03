@@ -261,7 +261,7 @@ export default class Cha extends THREE.Object3D {
 				this.fsm.stopPicking();
 				this.prepareCrossFade(this.actionDictionary.pickUp, this.actionDictionary.idle, 0.5);
 
-				if (this.pickedObject.tag=='crumb')
+				if (this.pickedObject.tag=='crumb' || this.pickedObject.tag=='vball')
 					this.pickedObject.parent.bePickedFinal(this.pickedObject);
 			}
 			break;
@@ -537,6 +537,7 @@ export default class Cha extends THREE.Object3D {
 		switch (object.tag)
 		{
 			case "crumb":
+			case "vball":
 			this.pickedObject = object;
 			if (this.model.position.distanceToSquared(object.position) > 3*3)
 			{

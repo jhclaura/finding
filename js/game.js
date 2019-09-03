@@ -310,11 +310,12 @@ export default class Game {
 			
 			// s
 			case 83:
-			this.container.style.cursor = "auto";
+			// this.container.style.cursor = "auto";
 			break;
 
 			// d
 			case 68:
+			this.ammo.applyForceToAll();
 			break;
 
 			// ←, ↓, →
@@ -323,9 +324,19 @@ export default class Game {
 			case 39:
 			break;
 
+			// t
+			case 84:
+			this.chapterManager.throw();
+			break;
+
+			// v
+			case 86:
+			this.chapterManager.volleyball();
+			break;
+
 			// h
 			case 72:
-			this.container.style.cursor = "none";
+			// this.container.style.cursor = "none";
 			break;
 
 			// e
@@ -434,7 +445,7 @@ export default class Game {
 					targetPoint = intersections[1].point;
 				}
 			}
-			console.log(targetObject);
+			// console.log(targetObject);
 
 			switch (targetObject.tag)
 			{
@@ -456,6 +467,7 @@ export default class Game {
 				break;
 
 				case "crumb":
+				case "vball":
 				this.Cha.pickUp(targetObject);
 				break;
 			}
