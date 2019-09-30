@@ -2,14 +2,14 @@ import SameChapter from "./chapters/same.js"
 import LazyChapter from "./chapters/lazy.js"
 // import LostChapter from "./chapters/lost.js"
 // import LikeChapter from "./chapters/like.js"
-// import ConfidentChapter from "./chapters/confident.js"
+import DoubtfulChapter from "./chapters/doubtful.js"
 // import JealousChapter from "./chapters/jealous.js"
 
 export default class ChapterManager
 {
 	constructor(scene, cameraController, ammo, modelLoader, creatureCreator, cha)
 	{
-		this.chapterNames = ["lazy", "lost", "same", "like", "confident", "jealous"];
+		this.chapterNames = ["lazy", "lost", "same", "like", "doubtful", "jealous"];
 		this.scene = scene;
 		this.cameraController = cameraController;
 		this.ammo = ammo;
@@ -42,7 +42,7 @@ export default class ChapterManager
 
 		eventBus.on("ChaCollideTrigger", (trigger)=>{
 			console.log("Cha hits " + trigger);
-			if (trigger=="lazy" || trigger=="same")
+			if (trigger=="lazy" || trigger=="same" || trigger=="doubtful")
 				this.start(trigger);
 			else
 				return;
@@ -77,8 +77,8 @@ export default class ChapterManager
 			this.currentChapter = new LikeChapter(this.ammo, this.modelLoader);
 			break;
 
-			case "confident":
-			this.currentChapter = new ConfidentChapter(this.ammo, this.modelLoader);
+			case "doubtful":
+			this.currentChapter = new DoubtfulChapter(this.ammo, this.modelLoader, this);
 			break;
 
 			case "jealous":

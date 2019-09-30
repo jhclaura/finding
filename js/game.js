@@ -106,6 +106,7 @@ export default class Game {
 		material = new THREE.MeshLambertMaterial({color: 0x787878});
 		this.ground = new THREE.Mesh(geometry, material);
 		this.ground.position.y -= 0.5;
+		this.ground.name = "ground";
 		this.ground.tag = "ground";
 		// this.ground.receiveShadow = true;
 		this.scene.add(this.ground);
@@ -445,7 +446,7 @@ export default class Game {
 					targetPoint = intersections[1].point;
 				}
 			}
-			// console.log(targetObject);
+			console.log(targetObject);
 
 			switch (targetObject.tag)
 			{
@@ -469,6 +470,13 @@ export default class Game {
 				case "crumb":
 				case "vball":
 				this.Cha.pickUp(targetObject);
+				break;
+
+				case "hole":
+				let tmpVec = new THREE.Vector3();
+				tmpVec.addVectors (targetObject.position, new THREE.Vector3(12,0,0));
+				this.Cha.updateMoveTarget(tmpVec);
+				this.Cha.prepareToSquad = true;
 				break;
 			}
 		}

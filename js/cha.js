@@ -25,8 +25,8 @@ export default class Cha extends THREE.Object3D {
 				{name: 'goPick', from: ['idle', 'follow'], to: 'goPick'},
 				{name: 'pickUp', from: ['idle', 'follow', 'goPick'], to: 'picking'},
 				{name: 'stopPicking', from: 'picking', to: 'idle'},
-				{name: 'sqaudDown', from: ['idle', 'follow'], to: 'sqaud'},
-				{name: 'stopSqauding', from: 'sqaud', to: 'idle'}
+				{name: 'squatDown', from: ['idle', 'follow'], to: 'squat'},
+				{name: 'stopSquating', from: 'squat', to: 'idle'}
 			],
 			methods: {
 				onWalk: ()=>{
@@ -34,7 +34,7 @@ export default class Cha extends THREE.Object3D {
 					eventBus.emit("ChaStartWalking");
 				},
 				onStopWalking: ()=>{
-					this.prepareCrossFade(this.actionDictionary.walk, this.actionDictionary.idle, 0.5);
+					this.prepareCrossFade(this.actionDictionary.walk, this.actionDictionary.idle, 0.5);					
 					eventBus.emit("ChaStopWalking");
 				},
 				onCapture: (lifecycle)=>{
@@ -75,6 +75,16 @@ export default class Cha extends THREE.Object3D {
 					else if (lifecycle.from == 'walk' || lifecycle.from == 'goPick')
 					{
 						this.prepareCrossFade(this.actionDictionary.walk, this.actionDictionary.pickUp, 0.5);
+						eventBus.emit("ChaStopWalking");
+					}
+				},
+				onSquatDown: (lifecycle)=>{
+					this.actionDictionary.squatDown.reset();
+					if(lifecycle.from=='idle')
+						this.prepareCrossFade(this.actionDictionary.idle, this.actionDictionary.squatDown, 0.5);
+					else
+					{
+						this.prepareCrossFade(this.actionDictionary.walk, this.actionDictionary.squatDown, 0.5);
 						eventBus.emit("ChaStopWalking");
 					}
 				}
@@ -152,6 +162,9 @@ export default class Cha extends THREE.Object3D {
 
 		// --------Pick Up--------
 		this.pickedObject;
+
+		// --------Others---------
+		this.prepareToSquad = false;
 	}
 
 	onLoadModel(gltf)
@@ -199,6 +212,8 @@ export default class Cha extends THREE.Object3D {
 
 		this.actionDictionary.clap.loop = THREE.LoopOnce;
 		this.actionDictionary.clap.clampWhenFinished = true;
+		this.actionDictionary.squatDown.loop = THREE.LoopOnce;
+		this.actionDictionary.squatDown.clampWhenFinished = true;
 
 		this.activateAllActions("idle");
 		this.currentAction = 'idle';
@@ -214,7 +229,7 @@ export default class Cha extends THREE.Object3D {
 		this.modelLoader.load("./assets/models/cha_frontShield.glb", (gltf)=>{
 			this.invisibleEditDome = gltf.scene.children[0].children[0];
 			this.invisibleEditDome.scale.multiplyScalar(1000);
-			//this.invisibleEditDome.material.visible = false;
+			this.invisibleEditDome.material.side = THREE.DoubleSide;
 			this.invisibleEditDome.visible = false;
 			this.model.add(this.invisibleEditDome);
 			this.finishedLoading = true;
@@ -388,8 +403,15 @@ export default class Cha extends THREE.Object3D {
 			//console.log(this.model.children[0].position.distanceTo(this.moveTarget));
 			if (this.model.position.distanceToSquared(this.moveTarget) < 1.5 * 1.5)
 			{
-				if(this.fsm.can('stopWalking'))
+				if(this.prepareToSquad)
+				{
+					this.fsm.squatDown();
+					this.prepareToSquad = false;
+				}
+				else if(this.fsm.can('stopWalking'))
+				{
 					this.fsm.stopWalking();
+				}
 			}
 			break;
 

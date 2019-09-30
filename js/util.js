@@ -46,6 +46,29 @@ export default class Util {
 		return q1;
 	}
 
+	// for Camera & Light
+	quaternionReverseLookAt(object, target)
+	{
+		let q1 = new THREE.Quaternion();
+		let m1 = new THREE.Matrix4();
+		let position = new THREE.Vector3();
+
+		object.updateWorldMatrix(true, false);
+		position.setFromMatrixPosition(object.matrixWorld);
+		m1.lookAt(position, target, object.up);
+
+		q1.setFromRotationMatrix(m1);
+
+		if(object.parent)
+		{
+			m1.extractRotation(object.parent.matrixWorld);
+			let q2 = new THREE.Quaternion();
+			q2.setFromRotationMatrix(m1);
+			q1.premultiply(q2.inverse());
+		}
+		return q1;
+	}
+
 	getKeyByValue(object, value)
 	{
 		return Object.keys(object).find(key => object[key] === value);
