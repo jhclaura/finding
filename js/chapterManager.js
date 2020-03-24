@@ -7,7 +7,7 @@ import DoubtfulChapter from "./chapters/doubtful.js"
 
 export default class ChapterManager
 {
-	constructor(scene, cameraController, ammo, modelLoader, creatureCreator, cha)
+	constructor(scene, cameraController, ammo, modelLoader, creatureCreator, cha, renderer)
 	{
 		this.chapterNames = ["lazy", "lost", "same", "like", "doubtful", "jealous"];
 		this.scene = scene;
@@ -16,6 +16,7 @@ export default class ChapterManager
 		this.modelLoader = modelLoader;
 		this.creatureCreator = creatureCreator;
 		this.cha = cha;
+		this.renderer = renderer;
 
 		this.currentChapter;
 		this.controlsCamera = false;
@@ -57,7 +58,6 @@ export default class ChapterManager
 
 	start(chapter)
 	{
-		eventBus.emit("ChapterStarts");
 
 		switch(chapter)
 		{
@@ -85,7 +85,9 @@ export default class ChapterManager
 			this.currentChapter = new JealousChapter(this.ammo, this.modelLoader);
 			break;
 		}
-		this.scene.add(this.currentChapter);		
+		this.scene.add(this.currentChapter);
+
+		eventBus.emit("ChapterStarts");
 	}
 
 	update(delta)
