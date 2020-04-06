@@ -1,17 +1,13 @@
-export default class FindingsEvent
-{
-	constructor()
-	{
-		//
-	}
+export default class FindingsEvent {
+  constructor() {
+    //
+  }
 
-	hasEvent(eventName)
-	{
-		return this.hasOwnProperty(eventName);
-	}
+  hasEvent(eventName) {
+    return this.hasOwnProperty(eventName)
+  }
 
-	fire(eventName, eventData)
-	{
-		this[eventName](eventData);
-	}
+  fire(eventName, eventData) {
+    this[eventName](eventData)
+  }
 }
