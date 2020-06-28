@@ -1,4 +1,5 @@
 import Character from './character.js'
+
 export default class DoubtDude extends Character {
   constructor(ammo, modelLoader, assetPath, tag, callback) {
     super(ammo, modelLoader, assetPath, tag)
@@ -14,7 +15,7 @@ export default class DoubtDude extends Character {
         {
           name: 'goto',
           from: '*',
-          to: s => {
+          to: (s) => {
             return s
           },
         },
@@ -30,6 +31,7 @@ export default class DoubtDude extends Character {
             this.actionDictionary.scratch,
             0.5,
           )
+          this.mouthTL.play()
         },
       },
     })
@@ -103,6 +105,41 @@ export default class DoubtDude extends Character {
     // Animation setting
     // this.actionDictionary.scratch.loop = THREE.LoopOnce;
     // this.actionDictionary.scratch.clampWhenFinished = true;
+
+    this.mouth = this.model.getObjectByName('Mouth')
+    this.mouth.position.set(0.025, -0.1, 0)
+
+    this.mouthTL = new TimelineLite()
+    this.mouthTL.to(this.mouth.position, 1, { y: -0.06 })
+    this.mouthTL.to(
+      this.mouth.children[0].rotation,
+      0.5,
+      { z: Math.PI / 8 },
+      0.2,
+    )
+    this.mouthTL.to(
+      this.mouth.children[1].rotation,
+      0.5,
+      { z: -Math.PI / 8 },
+      0.2,
+    )
+    this.mouthTL.to(this.mouth.children[0].rotation, 0.2, { z: 0 }, 0.7)
+    this.mouthTL.to(this.mouth.children[1].rotation, 0.2, { z: 0 }, 0.7)
+    this.mouthTL.pause()
+
+    this.ladders = this.model.getObjectByName('ladders')
+    this.lid = this.model.getObjectByName('lid')
+    this.lid.position.set(0.04212, 0, -0.00373)
+    // this.lid.position.set(0, 0, 0)
+
+    this.laddersTL = new TimelineLite()
+    this.laddersTL.to(this.lid.rotation, 3, { x: -Math.PI / 1.5 })
+    this.laddersTL.to(this.ladders.position, 1, { z: -0.001 })
+    this.laddersTL.pause()
+
+    window.mouth = this.mouth
+    window.ladders = this.ladders
+    window.lid = this.lid
 
     this.callback()
   }
