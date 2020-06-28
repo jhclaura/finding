@@ -37,10 +37,8 @@ export default class Game {
 
     this.ambientLight = new THREE.AmbientLight(0xd8d8d8)
     // this.ambientLight = new THREE.HemisphereLight( 0xd8d8d8, 0xd8d8d8, 1 );
-    console.log(this.ambientLight)
     this.directionalLight = new THREE.DirectionalLight(0xffffff, 1)
     // this.directionalLight.castShadow = true;
-    console.log(this.directionalLight)
     this.scene.add(this.ambientLight)
     this.scene.add(this.directionalLight)
 
@@ -278,22 +276,22 @@ export default class Game {
     }
     folder
       .add(this.cameraPanelSettings, 'position x', -500.0, 500.0, 0.1)
-      .onChange(position => {
+      .onChange((position) => {
         this.cameraController.setAxisPosition('x', position)
       })
     folder
       .add(this.cameraPanelSettings, 'position y', -500.0, 500.0, 0.1)
-      .onChange(position => {
+      .onChange((position) => {
         this.cameraController.setAxisPosition('y', position)
       })
     folder
       .add(this.cameraPanelSettings, 'position z', -500.0, 500.0, 0.1)
-      .onChange(position => {
+      .onChange((position) => {
         this.cameraController.setAxisPosition('z', position)
       })
     folder
       .add(this.cameraPanelSettings, 'frustum size', 0, 200, 1)
-      .onChange(size => {
+      .onChange((size) => {
         this.cameraController.setFrustumSize(size)
       })
   }
@@ -561,7 +559,6 @@ export default class Game {
           break
 
         case 'hole':
-          console.log(targetPoint)
           let tmpVec = new THREE.Vector3()
           tmpVec.addVectors(targetObject.position, new THREE.Vector3(12, 0, 0))
           this.Cha.updateMoveTarget(tmpVec)
@@ -571,6 +568,10 @@ export default class Game {
         case 'doubtDude':
           if (targetObject.name == 'doubtDude') {
             this.chapterManager.currentChapter.pokeDude()
+          } else if (targetObject.name == 'tunnel') {
+            this.chapterManager.currentChapter.pokeTunnel()
+          } else if (targetObject.name == 'lid') {
+            this.chapterManager.currentChapter.pokeLid()
           }
           // let tmpVec = new THREE.Vector3();
           // tmpVec.addVectors(targetObject.position, new THREE.Vector3(12, 0, 0));
