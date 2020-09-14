@@ -18,6 +18,8 @@ export default class Game {
 
     this.camToChaHeight = 50
     this.camToChaDistance = 120
+
+    this.mouseIsDown = false
   }
 
   init(panel) {
@@ -199,6 +201,7 @@ export default class Game {
       this.creatureCreator,
       this.Cha,
       this.renderer,
+      this,
     )
 
     // DAT.GUI
@@ -402,7 +405,8 @@ export default class Game {
 
       // d
       case 68:
-        this.ammo.applyForceToAll()
+        //this.ammo.applyForceToAll()
+        this.chapterManager.drop()
         break
 
       // ←, ↓, →
@@ -466,6 +470,22 @@ export default class Game {
     // this.scene.add(newCreature);
 
     // this.scene.add(this.ammo.throwBall(this.raycaster, true));
+  }
+
+  onMouseDown(event) {
+    if (!this.mouseIsDown) {
+      // mouse just down
+      this.checkMouseDownRaycast()
+      this.mouseIsDown = true
+    }
+  }
+
+  onMouseUp(event) {
+    if (this.mouseIsDown) {
+      // mouse just up
+      eventBus.emit('mouseUp')
+      this.mouseIsDown = false
+    }
   }
 
   onMouseMove(event) {
@@ -583,6 +603,24 @@ export default class Game {
 
     //test
     // this.scene.add(this.ammo.throw(this.arrow.model, this.arrow.normalMaterial, this.arrow.shape));
+  }
+
+  checkMouseDownRaycast() {
+    this.raycaster.setFromCamera(this.mouse, this.camera)
+    let intersections = this.raycaster.intersectObjects(
+      this.scene.children,
+      true,
+    )
+    if (intersections.length > 0) {
+      let targetObject = intersections[0].object
+      let targetPoint = intersections[0].point
+
+      switch (targetObject.tag) {
+        case 'doubtFeature':
+          targetObject.parent.parent.grab(targetObject.parent)
+          break
+      }
+    }
   }
 
   toggleCursor() {

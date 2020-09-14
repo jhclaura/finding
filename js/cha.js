@@ -12,6 +12,7 @@ export default class Cha extends THREE.Object3D {
   }
 
   init() {
+    window.Cha = this
     this.currentAction = ''
     this.fsm = new StateMachine({
       init: 'idle',
@@ -25,6 +26,15 @@ export default class Cha extends THREE.Object3D {
         { name: 'stopPicking', from: 'picking', to: 'idle' },
         { name: 'squatDown', from: ['idle', 'follow'], to: 'squat' },
         { name: 'stopSquating', from: 'squat', to: 'idle' },
+        { name: 'climb', from: ['idle', 'follow'], to: 'climbing' },
+        { name: 'stopClimbing', from: 'climbing', to: 'idle' },
+        {
+          name: 'goto',
+          from: '*',
+          to: function (s) {
+            return s
+          },
+        },
       ],
       methods: {
         onWalk: () => {
@@ -43,7 +53,7 @@ export default class Cha extends THREE.Object3D {
           )
           eventBus.emit('ChaStopWalking')
         },
-        onCapture: lifecycle => {
+        onCapture: (lifecycle) => {
           eventBus.emit('onCapture')
           //console.log("onCapture! lifecycle.from: " + lifecycle.from);
           this.actionDictionary.clap.reset()
@@ -81,7 +91,7 @@ export default class Cha extends THREE.Object3D {
             eventBus.emit('throwFinish')
           }, 500)
         },
-        onGoPick: lifecycle => {
+        onGoPick: (lifecycle) => {
           if (lifecycle.from == 'idle') {
             this.prepareCrossFade(
               this.actionDictionary.idle,
@@ -91,7 +101,7 @@ export default class Cha extends THREE.Object3D {
             eventBus.emit('ChaStartWalking')
           }
         },
-        onPickUp: lifecycle => {
+        onPickUp: (lifecycle) => {
           if (lifecycle.from == 'idle') {
             this.prepareCrossFade(
               this.actionDictionary.idle,
@@ -107,7 +117,7 @@ export default class Cha extends THREE.Object3D {
             eventBus.emit('ChaStopWalking')
           }
         },
-        onSquatDown: lifecycle => {
+        onSquatDown: (lifecycle) => {
           this.actionDictionary.squatDown.reset()
           if (lifecycle.from == 'idle')
             this.prepareCrossFade(
@@ -124,11 +134,32 @@ export default class Cha extends THREE.Object3D {
             eventBus.emit('ChaStopWalking')
           }
         },
+        onStopSquating: () => {
+          this.prepareCrossFade(
+            this.actionDictionary.squatDown,
+            this.actionDictionary.squatUp,
+            0.5,
+          )
+        },
+        onClimb: () => {
+          this.prepareCrossFade(
+            this.actionDictionary.idle,
+            this.actionDictionary.ladder,
+            0.5,
+          )
+        },
+        onStopClimbing: () => {
+          this.prepareCrossFade(
+            this.actionDictionary.ladder,
+            this.actionDictionary.idle,
+            0.5,
+          )
+        },
       },
     })
     this.justCaptured = false
 
-    this.modelLoader.load('./assets/models/cha_gameExport.glb', gltf => {
+    this.modelLoader.load('./assets/models/cha_gameExport.glb', (gltf) => {
       this.onLoadModel(gltf)
     })
 
@@ -173,7 +204,7 @@ export default class Cha extends THREE.Object3D {
         console.log("Cha's dialogue starts!")
         self.showCursor = true
       },
-      onComplete: self => {
+      onComplete: (self) => {
         console.log("Cha's dialogue ends!")
         self.showCursor = false
         self.reset()
@@ -228,7 +259,7 @@ export default class Cha extends THREE.Object3D {
     this.lookQuaternionBase = this.dummyHead.quaternion
 
     // Bounding box
-    this.model.traverse(function(mesh) {
+    this.model.traverse(function (mesh) {
       if (mesh instanceof THREE.Mesh) {
         //mesh.geometry.computeBoundingBox ();
         // mesh.frustumCulled = false;
@@ -255,10 +286,10 @@ export default class Cha extends THREE.Object3D {
     this.activateAllActions('idle')
     this.currentAction = 'idle'
 
-    this.animationMixer.addEventListener('loop', e => {
+    this.animationMixer.addEventListener('loop', (e) => {
       this.onAniLoopFinished(e)
     })
-    this.animationMixer.addEventListener('finished', e => {
+    this.animationMixer.addEventListener('finished', (e) => {
       this.onAniFinished(e)
     })
 
@@ -267,7 +298,7 @@ export default class Cha extends THREE.Object3D {
     this.bboxHelper = new THREE.Box3Helper(this.bbox, 0xffff00)
     this.add(this.bboxHelper)
 
-    this.modelLoader.load('./assets/models/cha_frontShield.glb', gltf => {
+    this.modelLoader.load('./assets/models/cha_frontShield.glb', (gltf) => {
       this.invisibleEditDome = gltf.scene.children[0].children[0]
       this.invisibleEditDome.scale.multiplyScalar(1000)
       // this.invisibleEditDome.material.side = THREE.DoubleSide;
@@ -325,6 +356,18 @@ export default class Cha extends THREE.Object3D {
             this.pickedObject.tag == 'vball'
           )
             this.pickedObject.parent.bePickedFinal(this.pickedObject)
+        }
+        break
+
+      case 'squatUp':
+        if (this.actionDictionary[aniName].weight == 1) {
+          this.actionDictionary[aniName].weight = 0
+          this.prepareCrossFade(
+            this.actionDictionary.squatUp,
+            this.actionDictionary.idle,
+            0.5,
+          )
+          eventBus.emit('ChaSquatUp')
         }
         break
     }
@@ -434,6 +477,7 @@ export default class Cha extends THREE.Object3D {
     // --------TRANSFORMATION--------
     switch (this.fsm.state) {
       case 'follow':
+      case 'climbing':
         this.neckJoint.quaternion.slerp(this.identityQuaternion, 0.1)
         this.model.quaternion.slerp(this.rotateTarget, delta * 5)
 
@@ -453,6 +497,8 @@ export default class Cha extends THREE.Object3D {
             this.prepareToSquad = false
           } else if (this.fsm.can('stopWalking')) {
             this.fsm.stopWalking()
+          } else if (this.fsm.can('stopClimbing')) {
+            this.fsm.stopClimbing()
           }
         }
         break
@@ -518,11 +564,28 @@ export default class Cha extends THREE.Object3D {
     //this.moveTarget = this.model.worldToLocal(moveTarget);
     this.moveTarget = moveTarget
 
-    //console.log(this.model.position.distanceTo(this.moveTarget));
+    console.log(
+      this.model.position,
+      this.model.position.distanceTo(this.moveTarget),
+    )
     if (this.model.position.distanceToSquared(this.moveTarget) > 1.5 * 1.5) {
       if (this.fsm.can('walk')) {
         console.log('transition from Idle to Follow')
         this.fsm.walk()
+      }
+    }
+  }
+
+  updateClimbTarget(rotateTarget, moveTarget) {
+    this.rotateTarget = rotateTarget
+    this.moveTarget = moveTarget
+    console.log(
+      this.model.position,
+      this.model.position.distanceTo(this.moveTarget),
+    )
+    if (this.model.position.distanceToSquared(this.moveTarget) > 1 * 1) {
+      if (this.fsm.can('climb')) {
+        this.fsm.climb()
       }
     }
   }
@@ -609,6 +672,13 @@ export default class Cha extends THREE.Object3D {
           }
         }
         break
+    }
+  }
+
+  stopSquating() {
+    if (this.fsm.can('stopSquating')) {
+      console.log('stopSquating')
+      this.fsm.stopSquating()
     }
   }
 

@@ -134,7 +134,7 @@ export default class DoubtDude extends Character {
 
     this.laddersTL = new TimelineLite()
     this.laddersTL.to(this.lid.rotation, 3, { x: -Math.PI / 1.5 })
-    this.laddersTL.to(this.ladders.position, 1, { z: -0.001 })
+    this.laddersTL.to(this.ladders.position, 1, { z: -0.005 })
     this.laddersTL.pause()
 
     window.mouth = this.mouth

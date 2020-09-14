@@ -33,6 +33,8 @@ function start() {
   window.addEventListener('keyup', onKeyUp, false)
   window.addEventListener('click', onMouseClick, false)
   window.addEventListener('mousemove', onMouseMove, false)
+  window.addEventListener('mousedown', onMouseDown, false)
+  window.addEventListener('mouseup', onMouseUp, false)
 
   animate()
 }
@@ -63,4 +65,12 @@ function onMouseClick(e) {
 
 function onMouseMove(e) {
   game.onMouseMove(e)
+}
+
+function onMouseDown(e) {
+  game.onMouseDown(e)
+}
+
+function onMouseUp(e) {
+  game.onMouseUp(e)
 }

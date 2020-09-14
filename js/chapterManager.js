@@ -14,6 +14,7 @@ export default class ChapterManager {
     creatureCreator,
     cha,
     renderer,
+    game,
   ) {
     this.chapterNames = ['lazy', 'lost', 'same', 'like', 'doubtful', 'jealous']
     this.scene = scene
@@ -23,6 +24,7 @@ export default class ChapterManager {
     this.creatureCreator = creatureCreator
     this.cha = cha
     this.renderer = renderer
+    this.game = game
 
     this.currentChapter
     this.controlsCamera = false
@@ -49,7 +51,7 @@ export default class ChapterManager {
     }
     this.triggersArray = Object.values(this.triggers)
 
-    eventBus.on('ChaCollideTrigger', trigger => {
+    eventBus.on('ChaCollideTrigger', (trigger) => {
       console.log('Cha hits ' + trigger)
       if (trigger == 'lazy' || trigger == 'same' || trigger == 'doubtful')
         this.start(trigger)
@@ -138,6 +140,12 @@ export default class ChapterManager {
   volleyball() {
     if (this.currentChapter.chapterName == 'lazy') {
       this.currentChapter.convertAllCrumbsToBalls()
+    }
+  }
+
+  drop() {
+    if (this.currentChapter.chapterName == 'doubtful') {
+      this.currentChapter.dropBall()
     }
   }
 }
